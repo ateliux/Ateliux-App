@@ -1,0 +1,1 @@
+export { authContent } from "./auth-content";
