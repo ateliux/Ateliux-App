@@ -4,15 +4,29 @@ import { useState, type FormEvent } from "react";
 import { blogContent } from "../../content/blog";
 import { BlogSocialLinks } from "./BlogSocialLinks";
 import { MotionButton } from "../motion";
+import { subscribeNewsletter } from "@/services/newsletter.service";
 
 export function BlogNewsletter() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitted(true);
-    setEmail("");
+    setSubmitting(true);
+    setSubmitted(false);
+    setError("");
+
+    try {
+      await subscribeNewsletter({ email, origin: "blog" });
+      setSubmitted(true);
+      setEmail("");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel registrar sua inscricao.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -30,6 +44,7 @@ export function BlogNewsletter() {
               onChange={(event) => {
                 setEmail(event.target.value);
                 setSubmitted(false);
+                setError("");
               }}
               placeholder={blogContent.newsletter.placeholder}
               required
@@ -38,13 +53,14 @@ export function BlogNewsletter() {
 
             <MotionButton
               type="submit"
+              disabled={submitting}
               className="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-black transition-colors hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-black"
             >
-              {blogContent.newsletter.ctaLabel}
+              {submitting ? "Enviando..." : blogContent.newsletter.ctaLabel}
             </MotionButton>
           </form>
           <p aria-live="polite" className="text-xs text-zinc-500">
-            {submitted ? "Inscrição demonstrada com sucesso." : ""}
+            {error || (submitted ? "Inscricao registrada com sucesso." : "")}
           </p>
         </div>
 

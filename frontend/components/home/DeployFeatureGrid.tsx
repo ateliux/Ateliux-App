@@ -88,7 +88,7 @@ export function DeployFeatureGrid() {
   const secondRow = backendBrowserContent.deploy.features.slice(3);
 
   return (
-    <div className="relative z-10 mx-auto mb-32 max-w-5xl border-b border-t border-gray-100 bg-white">
+    <div className="relative z-10 mx-auto mb-6 max-w-5xl border-b border-t border-gray-100 bg-white md:mb-10">
       <div className="py-16 text-center">
         <h3 className="mb-4 text-2xl font-bold tracking-tight text-gray-900 md:text-3xl">
           {backendBrowserContent.deploy.title}

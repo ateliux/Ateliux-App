@@ -6,12 +6,15 @@ export const siteRoutes = {
   pricing: "/precos",
   blog: "/blog",
   about: "/sobre",
+  faq: "/faq",
+  support: "/suporte",
   design: "/design",
   contact: "/contato",
   terms: "/termos",
   privacy: "/privacidade",
   login: "/login",
   register: "/criar-conta",
+  clientPortal: "/cliente/visao-geral",
 } as const;
 
 export function contactRoute(params?: { plan?: string; subject?: string }) {

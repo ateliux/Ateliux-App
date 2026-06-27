@@ -1,6 +1,9 @@
-import type { ReactNode } from "react";
+import type { InputHTMLAttributes, ReactNode } from "react";
 
-type ContactInputProps = {
+type ContactInputProps = Pick<
+  InputHTMLAttributes<HTMLInputElement>,
+  "autoComplete" | "defaultValue" | "name"
+> & {
   label: string;
   placeholder: string;
   type?: "text" | "email" | "tel";
@@ -12,6 +15,7 @@ export function ContactInput({
   placeholder,
   type = "text",
   children,
+  ...inputProps
 }: ContactInputProps) {
   return (
     <label className="block">
@@ -26,6 +30,7 @@ export function ContactInput({
           <input
             type={type}
             placeholder={placeholder}
+            {...inputProps}
             className="h-11 w-full border border-gray-200 bg-white px-4 text-xs text-slate-900 outline-none transition-colors placeholder:text-gray-400 focus:border-black"
           />
         )}

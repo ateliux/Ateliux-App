@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowLeft, Layers } from "lucide-react";
 import { authContent } from "../../content/auth";
 
@@ -5,13 +6,13 @@ export function AuthBrandPanel() {
   return (
     <aside className="relative z-10 flex h-full w-full flex-col justify-between border-b border-[#262729] p-8 md:min-h-screen md:border-b-0 md:border-r md:p-14 lg:p-16">
       <div>
-        <a
-          href="/inicio"
+        <Link
+          href={authContent.brand.backHref}
           className="inline-flex items-center text-xs text-[#888888] transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-[#121214]"
         >
           <ArrowLeft className="mr-2 h-3.5 w-3.5" />
           {authContent.brand.backLabel}
-        </a>
+        </Link>
       </div>
 
       <div className="mt-24 md:mt-0">
@@ -34,13 +35,13 @@ export function AuthBrandPanel() {
           aria-label="Links institucionais"
         >
           {authContent.brand.links.map((item) => (
-            <a
+            <Link
               key={item.href}
               href={item.href}
               className="transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-[#121214]"
             >
               {item.label}
-            </a>
+            </Link>
           ))}
         </nav>
       </div>

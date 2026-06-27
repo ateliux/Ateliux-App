@@ -255,9 +255,9 @@ export function BackendCodeEditor() {
         <div className="absolute -inset-1.5 rounded-[1.8rem] bg-[linear-gradient(90deg,#ef4444,#f472b6,#a855f7,#60a5fa,#4ade80,#eab308)] opacity-20 blur-2xl" />
 
         <div className="relative overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-[0_15px_50px_rgba(0,0,0,0.06)]">
-          <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-white px-6 py-4">
-            <div className="flex flex-1 items-center gap-6">
-              <div className="flex items-center gap-3.5 text-gray-400">
+          <div className="flex min-w-0 items-center justify-between gap-3 border-b border-gray-100 bg-white px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-6">
+              <div className="flex shrink-0 items-center gap-2.5 text-gray-400 sm:gap-3.5">
                 <button
                   type="button"
                   onClick={handleResetCode}
@@ -301,29 +301,29 @@ export function BackendCodeEditor() {
               <button
                 type="button"
                 onClick={handleCopyRoute}
-                className="flex w-full max-w-md items-center justify-between gap-2 rounded-xl border border-gray-200/40 bg-[#F4F4F5] px-4 py-2 text-left text-xs text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-4"
+                className="flex min-w-0 flex-1 items-center justify-between gap-2 overflow-hidden rounded-xl border border-gray-200/40 bg-[#F4F4F5] px-3 py-2 text-left text-xs text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-4 sm:max-w-md sm:px-4"
                 aria-label="Copiar rota do exemplo"
               >
-                <span className="truncate font-medium tracking-wide">
+                <span className="min-w-0 truncate whitespace-nowrap font-medium tracking-wide">
                   {backendBrowserContent.editor.url}
                   {activeExample.route}
                 </span>
-                <span className="text-sm font-bold text-gray-400">
+                <span className="shrink-0 text-sm font-bold text-gray-400">
                   {copiedRoute ? "✓" : "+"}
                 </span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="hidden text-[10px] font-bold uppercase tracking-wider text-gray-400 sm:inline">
                 {runMode === "production" ? "Produção" : "Preview"}
               </span>
               <span className="h-2.5 w-2.5 rounded-full bg-[#10B981] shadow-[0_0_8px_#10B981]" />
             </div>
           </div>
 
-          <div className="flex select-none items-center justify-between border-b border-gray-100 bg-white px-6 py-3">
-            <div className="flex items-center gap-3 text-xs font-semibold">
+          <div className="flex select-none flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-white px-3 py-3 sm:flex-nowrap sm:px-6">
+            <div className="flex min-w-0 items-center gap-1 text-xs font-semibold sm:gap-3">
               <button
                 type="button"
                 onClick={() => setEditorMode("code")}
@@ -404,7 +404,7 @@ export function BackendCodeEditor() {
                 onKeyDown={handleTabIndent}
                 spellCheck={false}
                 aria-label="Editor de código TypeScript"
-                className="min-h-[260px] flex-1 resize-none overflow-x-auto whitespace-pre border-none bg-transparent font-mono tracking-wide text-gray-800 outline-none placeholder:text-gray-300"
+                className="min-h-[260px] min-w-0 flex-1 resize-none overflow-x-auto whitespace-pre border-none bg-transparent font-mono tracking-wide text-gray-800 outline-none placeholder:text-gray-300"
               />
 
               <div className="pointer-events-none absolute right-6 top-6 select-none opacity-[0.03]">

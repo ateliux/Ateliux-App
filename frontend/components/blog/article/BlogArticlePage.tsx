@@ -11,7 +11,7 @@ type BlogArticlePageProps = {
 
 export function BlogArticlePage({ article }: BlogArticlePageProps) {
   return (
-    <main className="min-h-screen overflow-x-hidden bg-black text-white antialiased">
+    <main className="min-h-screen overflow-x-clip bg-black text-white antialiased">
       <MotionCard hover={false}><BlogArticleHero article={article} /></MotionCard>
       <MotionItem><BlogArticleHeader article={article} /></MotionItem>
       <BlogArticleLayout article={article} />

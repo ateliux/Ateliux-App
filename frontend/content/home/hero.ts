@@ -5,6 +5,8 @@ export const heroContent = {
       label: "Designer",
       top: "10%",
       left: "12%",
+      mobileTop: "8%",
+      mobileLeft: "3%",
       rotate: "-rotate-12",
     },
     {
@@ -12,6 +14,8 @@ export const heroContent = {
       label: "Gerente de produto",
       top: "55%",
       left: "5%",
+      mobileTop: "39%",
+      mobileLeft: "1%",
       rotate: "-rotate-6",
     },
     {
@@ -19,6 +23,8 @@ export const heroContent = {
       label: "Engenheiro de Design",
       top: "12%",
       left: "78%",
+      mobileTop: "17%",
+      mobileLeft: "55%",
       rotate: "rotate-12",
     },
     {
@@ -26,6 +32,8 @@ export const heroContent = {
       label: "Engenheiro de Produto",
       top: "65%",
       left: "82%",
+      mobileTop: "67%",
+      mobileLeft: "48%",
       rotate: "rotate-6",
     },
   ],

@@ -1,21 +1,24 @@
+import { siteRoutes } from "../../data/siteRoutes";
+
 export const authContent = {
   brand: {
     name: "Ateliux",
+    backHref: siteRoutes.home,
     backLabel: "Voltar para o início",
     description:
       "A Ateliux cria sites, landing pages, e-commerce, SaaS, dashboards e ecossistemas digitais sob medida para empresas que querem autonomia no digital.",
     links: [
       {
         label: "Sobre",
-        href: "/sobre",
+        href: siteRoutes.about,
       },
       {
         label: "FAQ",
-        href: "/precos",
+        href: siteRoutes.faq,
       },
       {
         label: "Suporte",
-        href: "/contato",
+        href: siteRoutes.support,
       },
     ],
   },
@@ -41,7 +44,7 @@ export const authContent = {
       submitLabel: "Entrar",
       switchText: "Ainda não tem conta?",
       switchLabel: "Criar conta",
-      switchHref: "/criar-conta",
+      switchHref: siteRoutes.register,
     },
     register: {
       title: "Criar sua conta",
@@ -58,7 +61,7 @@ export const authContent = {
       submitLabel: "Criar conta",
       switchText: "Já possui uma conta?",
       switchLabel: "Entrar agora",
-      switchHref: "/login",
+      switchHref: siteRoutes.login,
     },
   },
 } as const;

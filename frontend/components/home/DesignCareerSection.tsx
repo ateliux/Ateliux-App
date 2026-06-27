@@ -12,6 +12,7 @@ import {
   Star,
 } from "lucide-react";
 import { designCareerContent } from "../../content/home";
+import { DesignCareerCarousel } from "./DesignCareerCarousel";
 
 type Task = (typeof designCareerContent.tasks)[number];
 type Skill = (typeof designCareerContent.profile.skills)[number];
@@ -154,10 +155,10 @@ function LeadRow({ lead }: { lead: Lead }) {
 export function DesignCareerSection() {
   return (
     <section
-      className="relative mt-16 overflow-hidden border-t border-gray-100 bg-white px-4 pb-32 pt-32"
+      className="relative mt-16 overflow-hidden border-t border-gray-100 bg-white px-4 pb-24 pt-24 md:pb-32 md:pt-32"
       aria-labelledby="design-career-title"
     >
-      <div className="relative z-10 mx-auto mb-20 max-w-4xl text-center">
+      <div className="relative z-10 mx-auto mb-12 max-w-4xl text-center md:mb-20">
         <div className="mb-6 flex items-center justify-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
           <Star className="h-3 w-3 fill-gray-400 text-gray-400" />
           <span>{designCareerContent.rating.score}</span>
@@ -202,8 +203,12 @@ export function DesignCareerSection() {
         </Link>
       </div>
 
-      <div className="pointer-events-none relative mx-auto mt-16 flex max-w-6xl select-none flex-col items-start justify-center gap-6 lg:flex-row lg:gap-8 lg:px-8">
-        <div className="relative mt-24 flex w-full max-w-[320px] flex-col items-center lg:mt-28">
+      <DesignCareerCarousel>
+        <div
+          role="group"
+          aria-label="Painel de direção visual"
+          className="relative flex w-[82vw] min-w-[280px] max-w-[320px] shrink-0 snap-center flex-col items-center pt-8 lg:mt-28 lg:w-full lg:min-w-0 lg:snap-none lg:pt-0"
+        >
           <div className="absolute -top-8 z-30 flex items-center justify-center gap-3 rounded-2xl border border-gray-100 bg-white/90 p-3 shadow-[0_15px_40px_rgb(0,0,0,0.06)] backdrop-blur-md">
             {designCareerContent.colorPalette.map((color, index) => (
               <div
@@ -237,7 +242,12 @@ export function DesignCareerSection() {
           </div>
         </div>
 
-        <div className="z-10 w-full max-w-[300px] lg:-mt-10">
+        <div
+          role="group"
+          aria-label="Painel principal do design system"
+          data-carousel-card="middle"
+          className="z-10 w-[82vw] min-w-[280px] max-w-[300px] shrink-0 snap-center lg:-mt-10 lg:w-full lg:min-w-0 lg:snap-none"
+        >
           <div className="rounded-[3rem] bg-[#F7F8FA] p-4 pt-8 shadow-sm">
             <div className="relative mt-12 rounded-[2.5rem] border border-gray-50/50 bg-white p-6 pt-16 shadow-sm">
               <div className="absolute -top-12 left-1/2 flex -translate-x-1/2 flex-col items-center">
@@ -291,7 +301,11 @@ export function DesignCareerSection() {
           </div>
         </div>
 
-        <div className="flex w-full max-w-[280px] flex-col gap-6 lg:mt-24">
+        <div
+          role="group"
+          aria-label="Painel de componentes visuais"
+          className="flex w-[82vw] min-w-[280px] max-w-[280px] shrink-0 snap-center flex-col gap-6 lg:mt-24 lg:w-full lg:min-w-0 lg:snap-none"
+        >
           <div className="rounded-3xl bg-[#F7F8FA] p-2 shadow-sm">
             <div className="rounded-[1.5rem] border border-gray-50 bg-white p-5 shadow-sm">
               <div className="mb-6 flex justify-between px-3">
@@ -365,7 +379,7 @@ export function DesignCareerSection() {
             </div>
           </div>
         </div>
-      </div>
+      </DesignCareerCarousel>
 
       <div className="mt-20 text-center">
         <p className="font-serif text-lg italic tracking-wide text-gray-400">

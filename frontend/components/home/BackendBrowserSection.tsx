@@ -5,7 +5,7 @@ import { MissingLinkDiagram } from "./MissingLinkDiagram";
 
 export function BackendBrowserSection() {
   return (
-    <section className="relative overflow-hidden border-t border-gray-100 bg-white px-6 pb-32 pt-32" aria-labelledby="backend-browser-title">
+    <section className="relative overflow-hidden border-t border-gray-100 bg-white px-4 pb-24 pt-24 sm:px-6 md:pb-32 md:pt-32" aria-labelledby="backend-browser-title">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[480px] border-b border-gray-100 bg-white" />
 
       <div className="relative z-10 mx-auto mb-16 max-w-3xl text-center">

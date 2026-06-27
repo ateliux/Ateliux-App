@@ -1,8 +1,12 @@
+import type { CSSProperties } from "react";
+
 type FloatingCursorProps = {
   color: string;
   label: string;
   top: string;
   left: string;
+  mobileTop?: string;
+  mobileLeft?: string;
   rotate?: string;
 };
 
@@ -11,12 +15,22 @@ export function FloatingCursor({
   label,
   top,
   left,
+  mobileTop = top,
+  mobileLeft = left,
   rotate = "-rotate-12",
 }: FloatingCursorProps) {
   return (
     <div
-      className="pointer-events-none absolute z-10 flex items-start gap-1"
-      style={{ top, left }}
+      className="pointer-events-none absolute left-[var(--cursor-mobile-left)] top-[var(--cursor-mobile-top)] z-30 flex origin-top-left scale-[0.82] items-start gap-1 sm:left-[var(--cursor-left)] sm:top-[var(--cursor-top)] sm:scale-100"
+      style={
+        {
+          "--cursor-left": left,
+          "--cursor-top": top,
+          "--cursor-mobile-left": mobileLeft,
+          "--cursor-mobile-top": mobileTop,
+        } as CSSProperties
+      }
+      aria-hidden="true"
     >
       <svg
         width="16"

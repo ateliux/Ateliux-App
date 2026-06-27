@@ -5,7 +5,7 @@ import { MotionButton, MotionCard } from "../motion";
 
 export function HeroSection() {
   return (
-    <section className="relative overflow-hidden px-4 pb-24 pt-12" aria-labelledby="hero-title">
+    <section className="relative overflow-hidden px-4 pb-20 pt-8 sm:pb-24 sm:pt-12" aria-labelledby="hero-title">
       <div className="relative mx-auto max-w-5xl">
         {heroContent.cursors.map((cursor) => (
           <FloatingCursor key={cursor.label} {...cursor} />
@@ -18,7 +18,7 @@ export function HeroSection() {
             <div className="h-2.5 w-2.5 rounded-full bg-gray-200" />
           </div>
 
-          <div className="relative flex min-h-[400px] items-center justify-center bg-[linear-gradient(to_right,#f4f4f5_1px,transparent_1px),linear-gradient(to_bottom,#f4f4f5_1px,transparent_1px)] bg-[length:40px_40px] bg-center p-8">
+          <div className="relative flex min-h-[470px] items-center justify-center bg-[linear-gradient(to_right,#f4f4f5_1px,transparent_1px),linear-gradient(to_bottom,#f4f4f5_1px,transparent_1px)] bg-[length:40px_40px] bg-center p-4 sm:min-h-[400px] sm:p-8">
             <div className="absolute left-8 top-16 hidden space-y-4 opacity-40 md:block">
               {heroContent.sideLines.map((_, index) => (
                 <div
@@ -36,16 +36,16 @@ export function HeroSection() {
               ))}
             </div>
 
-            <div className="z-10 mx-auto max-w-xl rounded-3xl bg-white/60 p-8 text-center shadow-[0_0_40px_20px_rgba(255,255,255,0.8)] backdrop-blur-3xl">
+            <div className="relative z-20 mx-auto w-full max-w-xl rounded-3xl bg-white/85 px-5 py-8 text-center shadow-[0_0_40px_20px_rgba(255,255,255,0.8)] backdrop-blur-3xl sm:bg-white/60 sm:p-8">
               <h1
                 id="hero-title"
-                className="mb-6 text-5xl font-bold leading-[1.1] tracking-tight text-gray-900 md:text-6xl"
+                className="mb-5 text-4xl font-bold leading-[1.08] tracking-tight text-gray-900 sm:mb-6 sm:text-5xl md:text-6xl"
               >
                 {heroContent.title[0]}
                 <br />
                 {heroContent.title[1]}
               </h1>
-              <p className="mx-auto mb-8 max-w-md text-lg text-gray-500">
+              <p className="mx-auto mb-7 max-w-md text-base leading-relaxed text-gray-500 sm:mb-8 sm:text-lg">
                 {heroContent.description}
               </p>
 
@@ -53,7 +53,7 @@ export function HeroSection() {
                 id={heroContent.form.id}
                 action={siteRoutes.contact}
                 method="get"
-                className="mx-auto flex max-w-sm flex-col gap-2 sm:flex-row"
+                className="relative z-40 mx-auto flex max-w-sm flex-col gap-2 sm:flex-row"
               >
                 <label htmlFor="waitlist-email" className="sr-only">
                   Email
@@ -63,7 +63,7 @@ export function HeroSection() {
                   name="email"
                   type="email"
                   placeholder={heroContent.form.placeholder}
-                  className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-sm transition-shadow placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                  className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm transition-shadow placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200"
                   required
                 />
                 <MotionButton

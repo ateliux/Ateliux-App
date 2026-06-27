@@ -6,7 +6,7 @@ import { MotionItem } from "../motion";
 
 export function BlogPage() {
   return (
-    <main className="min-h-screen overflow-x-hidden bg-black text-white antialiased">
+    <main className="min-h-screen overflow-x-clip bg-black text-white antialiased">
       <MotionItem direction="down"><BlogHero /></MotionItem>
       <MotionItem><FeaturedPost /></MotionItem>
       <MotionItem><BlogNewsletter /></MotionItem>

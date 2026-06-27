@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { MockAuthProvider } from "../components/auth/MockAuthProvider";
 import { SiteShell } from "../components/layout/SiteShell";
 
 export const metadata: Metadata = {
@@ -14,9 +15,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" data-scroll-behavior="smooth">
       <body className="min-h-screen bg-white text-slate-900 antialiased selection:bg-black selection:text-white">
-        <SiteShell>{children}</SiteShell>
+        <MockAuthProvider>
+          <SiteShell>{children}</SiteShell>
+        </MockAuthProvider>
       </body>
     </html>
   );

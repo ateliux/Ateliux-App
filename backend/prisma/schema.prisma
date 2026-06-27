@@ -1,0 +1,763 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  ADMIN
+}
+
+enum AdminRole {
+  ADMIN
+  PROJECT_MANAGER
+  SUPPORT
+  EDITOR
+  FINANCE
+  DESIGNER_DEV
+  ATTENDANCE
+}
+
+enum AccountStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  ARCHIVED
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  WAITING_CLIENT
+  IN_REVIEW
+  COMPLETED
+  ARCHIVED
+}
+
+enum StageStatus {
+  DRAFT
+  IN_PROGRESS
+  SENT_TO_CLIENT
+  WAITING_APPROVAL
+  CHANGES_REQUESTED
+  APPROVED
+  COMPLETED
+  ARCHIVED
+}
+
+enum BriefingStatus {
+  DRAFT
+  SENT
+  ANSWERED
+  IN_REVIEW
+  COMPLETED
+  ARCHIVED
+}
+
+enum ApprovalStatus {
+  DRAFT
+  SENT
+  WAITING_CLIENT
+  APPROVED
+  CHANGES_REQUESTED
+  RESENT
+  CANCELLED
+}
+
+enum PreviewStatus {
+  DRAFT
+  SENT
+  IN_APPROVAL
+  APPROVED
+  ARCHIVED
+}
+
+enum RequestStatus {
+  NEW
+  IN_REVIEW
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum VisibilityStatus {
+  INTERNAL
+  VISIBLE_TO_CLIENT
+}
+
+enum InboxChannel {
+  CLIENTS
+  SUPPORT
+}
+
+enum InboxStatus {
+  NEW
+  OPEN
+  IN_PROGRESS
+  WAITING_CLIENT
+  RESOLVED
+  ARCHIVED
+}
+
+enum InboxSource {
+  PORTAL_CLIENT
+  SUPPORT
+  APPROVAL
+  REQUEST
+  FILE
+  FINANCE
+  SCHEDULE
+  CONTACT
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum FileOrigin {
+  CLIENT
+  ATELIUX
+  SYSTEM
+  PUBLIC
+}
+
+enum FileStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  DELETED
+}
+
+enum FileVisibility {
+  PRIVATE
+  CLIENT_VISIBLE
+  PUBLIC
+}
+
+enum FileUploadedByType {
+  CLIENT
+  ADMIN
+  PUBLIC
+  SYSTEM
+}
+
+enum FileContext {
+  AVATAR
+  BLOG_COVER
+  CONTACT_ATTACHMENT
+  SUPPORT_ATTACHMENT
+  CLIENT_FILE
+  APPROVAL_ATTACHMENT
+  BRIEFING_ATTACHMENT
+  FINANCE_RECEIPT
+  PREVIEW_ASSET
+}
+
+enum FileScanStatus {
+  NOT_SCANNED
+  PENDING
+  CLEAN
+  INFECTED
+  FAILED
+}
+
+enum FinanceStatus {
+  PAID
+  PENDING
+  OVERDUE
+  CANCELLED
+}
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+  SCHEDULED
+  ARCHIVED
+}
+
+enum NewsletterStatus {
+  ACTIVE
+  NEW
+  UNSUBSCRIBED
+}
+
+enum ContactLeadStatus {
+  NEW
+  IN_REVIEW
+  CONTACTED
+  CONVERTED
+  ARCHIVED
+}
+
+enum NotificationAudience {
+  CLIENT
+  ADMIN
+}
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         UserRole
+  status       AccountStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  adminProfile AdminUser?
+  clientAccount ClientAccount?
+  refreshTokens RefreshToken[]
+  sentMessages  InboxMessage[]
+  uploadedFiles FileAsset[]
+  notifications Notification[]
+
+  @@index([role])
+  @@index([status])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AdminUser {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  role      AdminRole
+  avatarUrl String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  managedClients        Client[]              @relation("ClientResponsible")
+  managedProjects       Project[]             @relation("ProjectManager")
+  assignedConversations InboxConversation[]    @relation("ConversationAssignee")
+  blogPosts             BlogPost[]
+
+  @@index([role])
+}
+
+model Client {
+  id            String        @id @default(cuid())
+  name          String
+  company       String
+  email         String        @unique
+  phone         String?
+  plan          String
+  status        AccountStatus @default(INVITED)
+  responsibleId String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  responsible        AdminUser?          @relation("ClientResponsible", fields: [responsibleId], references: [id])
+  account            ClientAccount?
+  projects           Project[]
+  projectStages      ProjectStage[]
+  briefings          Briefing[]
+  briefingResponses  BriefingResponse[]
+  approvals          Approval[]
+  previews           Preview[]
+  clientRequests     ClientRequest[]
+  supportTickets     SupportTicket[]
+  inboxConversations InboxConversation[]
+  files              FileAsset[]
+  scheduleEvents     ScheduleEvent[]
+  financeRecords     FinanceRecord[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+
+  @@index([status])
+  @@index([responsibleId])
+}
+
+model ClientAccount {
+  id           String        @id @default(cuid())
+  clientId     String        @unique
+  userId       String        @unique
+  inviteStatus AccountStatus @default(INVITED)
+  lastAccessAt DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  clientId        String
+  name            String
+  type            String
+  scope           String
+  status          ProjectStatus @default(DRAFT)
+  progress        Int           @default(0)
+  deadline        DateTime?
+  currentStage    String?
+  visibleToClient Boolean       @default(false)
+  managerId       String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  client             Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  manager            AdminUser?          @relation("ProjectManager", fields: [managerId], references: [id])
+  stages             ProjectStage[]
+  briefings          Briefing[]
+  briefingResponses  BriefingResponse[]
+  approvals          Approval[]
+  previews           Preview[]
+  clientRequests     ClientRequest[]
+  supportTickets     SupportTicket[]
+  inboxConversations InboxConversation[]
+  files              FileAsset[]
+  scheduleEvents     ScheduleEvent[]
+  financeRecords     FinanceRecord[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([managerId])
+}
+
+model ProjectStage {
+  id               String     @id @default(cuid())
+  clientId         String
+  projectId        String
+  title            String
+  description      String
+  status           StageStatus @default(DRAFT)
+  clientStatus     String?
+  order            Int         @default(0)
+  deadline         DateTime?
+  sentToClientAt   DateTime?
+  requiresApproval Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model Briefing {
+  id              String          @id @default(cuid())
+  clientId        String
+  projectId       String?
+  title           String
+  type            String?
+  description     String
+  questions       Json?
+  status          BriefingStatus  @default(DRAFT)
+  visibility      VisibilityStatus @default(INTERNAL)
+  sentAt          DateTime?
+  createdById     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  client    Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project   Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  responses BriefingResponse[]
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model BriefingResponse {
+  id         String   @id @default(cuid())
+  briefingId String
+  clientId   String
+  projectId  String?
+  answers    Json
+  submittedAt DateTime @default(now())
+
+  briefing Briefing @relation(fields: [briefingId], references: [id], onDelete: Cascade)
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([briefingId])
+  @@index([clientId])
+  @@index([projectId])
+}
+
+model Approval {
+  id             String         @id @default(cuid())
+  clientId       String
+  projectId      String?
+  previewId      String?
+  title          String
+  type           String
+  message        String
+  status         ApprovalStatus @default(DRAFT)
+  clientComment  String?
+  sentAt         DateTime?
+  respondedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  preview Preview? @relation(fields: [previewId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([previewId])
+  @@index([status])
+}
+
+model Preview {
+  id        String        @id @default(cuid())
+  clientId  String
+  projectId String?
+  title     String
+  url       String
+  version   String
+  status    PreviewStatus @default(DRAFT)
+  sentAt    DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  approvals Approval[]
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model ClientRequest {
+  id                    String        @id @default(cuid())
+  clientId              String
+  projectId             String?
+  inboxConversationId   String?
+  title                 String
+  description           String
+  category              String?
+  priority              Priority      @default(MEDIUM)
+  status                RequestStatus @default(NEW)
+  response              String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  client            Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project           Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  inboxConversation InboxConversation? @relation(fields: [inboxConversationId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+  @@index([priority])
+}
+
+model SupportTicket {
+  id                    String       @id @default(cuid())
+  clientId              String?
+  projectId             String?
+  inboxConversationId   String?
+  contactLeadId         String?
+  subject               String
+  category              String
+  priority              Priority     @default(MEDIUM)
+  status                InboxStatus  @default(NEW)
+  lastMessage           String?
+  source                InboxSource  @default(SUPPORT)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  client            Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  project           Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  inboxConversation InboxConversation? @relation(fields: [inboxConversationId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+  @@index([priority])
+}
+
+model InboxConversation {
+  id          String      @id @default(cuid())
+  clientId    String?
+  projectId   String?
+  channel     InboxChannel
+  status      InboxStatus @default(NEW)
+  priority    Priority    @default(MEDIUM)
+  source      InboxSource
+  subject     String
+  preview     String?
+  assigneeId  String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  client         Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  project        Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  assignee       AdminUser?       @relation("ConversationAssignee", fields: [assigneeId], references: [id])
+  messages       InboxMessage[]
+  clientRequests ClientRequest[]
+  supportTickets SupportTicket[]
+  contactLead    ContactLead?
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([channel])
+  @@index([status])
+  @@index([priority])
+}
+
+model InboxMessage {
+  id             String     @id @default(cuid())
+  conversationId String
+  senderId       String?
+  senderType     String
+  body           String
+  createdAt      DateTime   @default(now())
+
+  conversation InboxConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User?             @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  attachments  FileAsset[]
+
+  @@index([conversationId])
+  @@index([senderId])
+}
+
+model FileAsset {
+  id                 String             @id @default(cuid())
+  clientId           String?
+  projectId          String?
+  messageId          String?
+  uploadedById       String?
+  uploadedByType     FileUploadedByType @default(SYSTEM)
+  originalName       String             @default("unknown")
+  safeName           String             @default("file")
+  name               String
+  extension          String             @default("")
+  mimeType           String
+  detectedMime       String?
+  size               Int
+  storageProvider    String
+  storageKey         String
+  cloudinaryPublicId String?
+  secureUrl          String?
+  url                String
+  origin             FileOrigin         @default(SYSTEM)
+  context            FileContext        @default(CLIENT_FILE)
+  visibility         FileVisibility     @default(PRIVATE)
+  status             FileStatus         @default(PENDING_REVIEW)
+  rejectionReason    String?
+  scanStatus         FileScanStatus     @default(NOT_SCANNED)
+  scanProvider       String?
+  scannedAt          DateTime?
+  scanResult         String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
+
+  client         Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  project        Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  uploadedBy     User?           @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  message        InboxMessage?   @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  financeReceipt FinanceRecord? @relation("FinanceReceipt")
+  blogCoverPosts BlogPost[]      @relation("BlogCover")
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([messageId])
+  @@index([context])
+  @@index([status])
+  @@index([visibility])
+  @@index([deletedAt])
+}
+
+model ScheduleEvent {
+  id              String           @id @default(cuid())
+  clientId        String
+  projectId       String?
+  title           String
+  type            String
+  date            DateTime
+  time            String?
+  responsible     String?
+  notes           String?
+  visibility      VisibilityStatus @default(INTERNAL)
+  status          String           @default("SCHEDULED")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([date])
+}
+
+model FinanceRecord {
+  id            String        @id @default(cuid())
+  clientId      String
+  projectId     String?
+  receiptFileId String?       @unique
+  description   String
+  amount        Decimal       @db.Decimal(12, 2)
+  currency      String        @default("BRL")
+  dueDate       DateTime
+  status        FinanceStatus @default(PENDING)
+  installment   String?
+  visibleToClient Boolean     @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  client      Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  receiptFile FileAsset? @relation("FinanceReceipt", fields: [receiptFileId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model BlogCategory {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  posts BlogPost[]
+}
+
+model BlogPost {
+  id          String         @id @default(cuid())
+  categoryId  String?
+  authorId    String?
+  coverFileId String?
+  title       String
+  slug        String         @unique
+  excerpt     String?
+  content     String
+  status      BlogPostStatus @default(DRAFT)
+  readTime    String?
+  publishedAt DateTime?
+  scheduledAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  category  BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  author    AdminUser?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  coverFile FileAsset?    @relation("BlogCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([status])
+  @@index([publishedAt])
+}
+
+model NewsletterSubscriber {
+  id        String           @id @default(cuid())
+  email     String           @unique
+  name      String?
+  origin    String?
+  status    NewsletterStatus @default(NEW)
+  interests String[]         @default([])
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([status])
+}
+
+model ContactLead {
+  id                    String            @id @default(cuid())
+  inboxConversationId   String?           @unique
+  name                  String
+  email                 String
+  phone                 String?
+  company               String?
+  projectType           String?
+  budget                String?
+  timeline              String?
+  currentSite           String?
+  skills                String?
+  message               String
+  fileAssetId           String?
+  origin                String            @default("site")
+  status                ContactLeadStatus @default(NEW)
+  responsibleId         String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  inboxConversation InboxConversation? @relation(fields: [inboxConversationId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([status])
+}
+
+model Notification {
+  id          String               @id @default(cuid())
+  recipientId String?
+  audience    NotificationAudience
+  clientId    String?
+  projectId   String?
+  type        String
+  title       String
+  body        String?
+  entityType  String?
+  entityId    String?
+  readAt      DateTime?
+  createdAt   DateTime             @default(now())
+
+  recipient User?    @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId])
+  @@index([audience])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([readAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorType  String
+  action     String
+  entityType String
+  entityId   String?
+  clientId   String?
+  projectId  String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  client  Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([createdAt])
+}

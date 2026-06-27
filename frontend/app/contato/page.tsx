@@ -7,6 +7,15 @@ export const metadata: Metadata = {
     "Solicite um orçamento para sites, landing pages, e-commerce, SaaS, dashboards, automações e ecossistemas digitais sob medida.",
 };
 
-export default function ContatoRoute() {
-  return <ContactPage />;
+type ContatoRouteProps = {
+  searchParams: Promise<{
+    email?: string | string[];
+  }>;
+};
+
+export default async function ContatoRoute({ searchParams }: ContatoRouteProps) {
+  const params = await searchParams;
+  const email = Array.isArray(params.email) ? params.email[0] : params.email;
+
+  return <ContactPage initialEmail={email?.trim()} />;
 }

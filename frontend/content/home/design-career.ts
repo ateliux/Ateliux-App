@@ -49,7 +49,7 @@ export const designCareerContent = {
     {
       status: "ETAPA 03",
       statusClass: "bg-[#0066FF]",
-      name: "Component library",
+      name: "Livraria de Componentes",
       message: "Botões, cards, inputs e padrões reutilizáveis",
       time: "UI Kit",
       image:
@@ -66,23 +66,23 @@ export const designCareerContent = {
     alt: "Símbolo visual do Design System da Ateliux",
     badge: "ATELIUX",
     name: "Design System",
-    username: "@ateliux.styleguide",
+    username: "@ateliux.design",
     stats: [
       { value: "01", label: "Tipo" },
       { value: "02", label: "Cores" },
       { value: "03", label: "UI Kit" },
     ],
     skills: [
-      { label: "Style guide definido", checked: true, opacity: "opacity-100" },
-      { label: "Paleta consistente", checked: true, opacity: "opacity-60" },
-      { label: "Componentes prontos", checked: false, opacity: "opacity-40" },
+      { label: "Guia de Estilo Definido", checked: true, opacity: "opacity-100" },
+      { label: "Paleta Consistente", checked: true, opacity: "opacity-60" },
+      { label: "Componentes Prontos", checked: false, opacity: "opacity-40" },
     ],
   },
   alignmentActive: "UI",
   alignmentSizes: ["UX", "UI", "KIT", "DEV"],
   leads: [
     {
-      name: "Style Guide",
+      name: "Guia de Estilo",
       description: "Tipografia, cores e hierarquia",
       image:
         "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=256&auto=format&fit=crop",
@@ -90,7 +90,7 @@ export const designCareerContent = {
       liked: true,
     },
     {
-      name: "Component Library",
+      name: "Livraria de Componentes",
       description: "Elementos reutilizáveis para escala",
       image:
         "https://images.unsplash.com/photo-1558655146-9f40138edfeb?q=80&w=256&auto=format&fit=crop",

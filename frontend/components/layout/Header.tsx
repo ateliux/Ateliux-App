@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { UserRound } from "lucide-react";
+import { useAuth } from "../auth/MockAuthProvider";
 import { headerContent } from "../../content/home";
 import { mainNavigation } from "../../data/navigation";
 import { siteRoutes } from "../../data/siteRoutes";
@@ -10,6 +12,7 @@ import { MotionItem, MotionLink } from "../motion";
 
 export function Header() {
   const pathname = usePathname();
+  const { isAuthenticated } = useAuth();
   const isBlog = pathname?.startsWith("/blog") ?? false;
 
   return (
@@ -59,27 +62,43 @@ export function Header() {
           </nav>
 
           <div className="flex items-center gap-3">
-            <MotionLink
-              href={headerContent.login.href}
-              className={`hidden rounded-lg px-3 py-2 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-4 sm:inline-flex ${
-                isBlog
-                  ? "text-zinc-400 hover:text-white focus-visible:ring-white focus-visible:ring-offset-black"
-                  : "text-gray-600 hover:text-black focus-visible:ring-black focus-visible:ring-offset-white"
-              }`}
-            >
-              {headerContent.login.label}
-            </MotionLink>
+            {isAuthenticated ? (
+              <MotionLink
+                href={siteRoutes.clientPortal}
+                aria-label="Acessar Portal do Cliente"
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-4 ${
+                  isBlog
+                    ? "bg-white text-black hover:bg-zinc-200 focus-visible:ring-white focus-visible:ring-offset-black"
+                    : "bg-black text-white hover:bg-gray-800 focus-visible:ring-black focus-visible:ring-offset-white"
+                }`}
+              >
+                <UserRound className="h-4 w-4" aria-hidden="true" />
+              </MotionLink>
+            ) : (
+              <>
+                <MotionLink
+                  href={headerContent.login.href}
+                  className={`hidden rounded-lg px-3 py-2 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-4 sm:inline-flex ${
+                    isBlog
+                      ? "text-zinc-400 hover:text-white focus-visible:ring-white focus-visible:ring-offset-black"
+                      : "text-gray-600 hover:text-black focus-visible:ring-black focus-visible:ring-offset-white"
+                  }`}
+                >
+                  {headerContent.login.label}
+                </MotionLink>
 
-            <MotionLink
-              href={headerContent.cta.href}
-              className={`rounded-lg px-4 py-2 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-4 ${
-                isBlog
-                  ? "bg-white text-black hover:bg-zinc-200 focus-visible:ring-white focus-visible:ring-offset-black"
-                  : "bg-black text-white hover:bg-gray-800 focus-visible:ring-black focus-visible:ring-offset-white"
-              }`}
-            >
-              {headerContent.cta.label}
-            </MotionLink>
+                <MotionLink
+                  href={headerContent.cta.href}
+                  className={`rounded-lg px-4 py-2 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-4 ${
+                    isBlog
+                      ? "bg-white text-black hover:bg-zinc-200 focus-visible:ring-white focus-visible:ring-offset-black"
+                      : "bg-black text-white hover:bg-gray-800 focus-visible:ring-black focus-visible:ring-offset-white"
+                  }`}
+                >
+                  {headerContent.cta.label}
+                </MotionLink>
+              </>
+            )}
           </div>
         </div>
       </MotionItem>

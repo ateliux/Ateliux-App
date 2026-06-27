@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, type FormEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { authContent } from "../../content/auth";
+import { siteRoutes } from "../../data/siteRoutes";
 import type { AuthMode } from "./AuthPage";
 import { AuthSocialButton } from "./AuthSocialButton";
+import { useAuth } from "./MockAuthProvider";
 import { MotionButton, MotionContainer, MotionForm, MotionItem } from "../motion";
 
 type AuthFormProps = {
@@ -12,10 +16,49 @@ type AuthFormProps = {
 };
 
 export function AuthForm({ mode }: AuthFormProps) {
+  const router = useRouter();
+  const { login, register } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [receiveUpdates, setReceiveUpdates] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const content = authContent.forms[mode];
+  const shouldShowSocialAuth = mode === "register";
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "").trim();
+    const name = String(formData.get("name") ?? "").trim();
+    const company = String(formData.get("company") ?? "").trim();
+
+    if (!email || !password || (mode === "register" && (!name || !company))) {
+      setFormError(
+        mode === "register"
+          ? "Preencha nome, empresa, e-mail e senha para criar sua conta."
+          : "Preencha e-mail e senha para entrar.",
+      );
+      return;
+    }
+
+    setFormError("");
+    setSubmitting(true);
+    try {
+      if (mode === "register") {
+        await register({ name, company, email, password });
+      } else {
+        await login({ email, password });
+      }
+      router.push(siteRoutes.clientPortal);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Nao foi possivel autenticar agora.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <section className="relative z-10 flex h-full w-full flex-col justify-between p-8 md:min-h-screen md:p-14 lg:p-16">
@@ -30,24 +73,28 @@ export function AuthForm({ mode }: AuthFormProps) {
           </p>
         </div>
 
-        <MotionContainer className="mb-6 flex flex-col gap-3">
-          <MotionItem staggered>
-          <AuthSocialButton provider="google" label={content.googleLabel} />
-          </MotionItem>
-          <MotionItem staggered>
-          <AuthSocialButton provider="apple" label={content.appleLabel} />
-          </MotionItem>
-        </MotionContainer>
+        {shouldShowSocialAuth ? (
+          <>
+            <MotionContainer className="mb-6 flex flex-col gap-3">
+              <MotionItem staggered>
+                <AuthSocialButton provider="google" label={content.googleLabel} />
+              </MotionItem>
+              <MotionItem staggered>
+                <AuthSocialButton provider="apple" label={content.appleLabel} />
+              </MotionItem>
+            </MotionContainer>
 
-        <div className="mb-6 flex items-center">
-          <div className="flex-1 border-t border-[#262729]" />
-          <span className="px-4 text-[11px] font-semibold uppercase tracking-wider text-[#555555]">
-            {authContent.shared.divider}
-          </span>
-          <div className="flex-1 border-t border-[#262729]" />
-        </div>
+            <div className="mb-6 flex items-center">
+              <div className="flex-1 border-t border-[#262729]" />
+              <span className="px-4 text-[11px] font-semibold uppercase tracking-wider text-[#555555]">
+                {authContent.shared.divider}
+              </span>
+              <div className="flex-1 border-t border-[#262729]" />
+            </div>
+          </>
+        ) : null}
 
-        <MotionForm className="flex flex-col gap-4">
+        <MotionForm className="flex flex-col gap-4" onSubmit={handleSubmit}>
           {mode === "register" ? (
             <MotionItem staggered>
             <div>
@@ -60,8 +107,32 @@ export function AuthForm({ mode }: AuthFormProps) {
 
               <input
                 id="name"
+                name="name"
                 type="text"
+                autoComplete="name"
                 placeholder={authContent.forms.register.namePlaceholder}
+                className="w-full bg-[#1A1B1E] px-3.5 py-2.5 text-[13px] text-white outline-none transition-colors placeholder:text-[#555555] focus:bg-[#202124]"
+              />
+            </div>
+            </MotionItem>
+          ) : null}
+
+          {mode === "register" ? (
+            <MotionItem staggered>
+            <div>
+              <label
+                htmlFor="company"
+                className="mb-1.5 block text-[12px] font-medium text-[#D1D5DB]"
+              >
+                Empresa
+              </label>
+
+              <input
+                id="company"
+                name="company"
+                type="text"
+                autoComplete="organization"
+                placeholder="Nome da empresa"
                 className="w-full bg-[#1A1B1E] px-3.5 py-2.5 text-[13px] text-white outline-none transition-colors placeholder:text-[#555555] focus:bg-[#202124]"
               />
             </div>
@@ -79,7 +150,9 @@ export function AuthForm({ mode }: AuthFormProps) {
 
             <input
               id="email"
+              name="email"
               type="email"
+              autoComplete="email"
               placeholder={content.emailPlaceholder}
               className="w-full bg-[#1A1B1E] px-3.5 py-2.5 text-[13px] text-white outline-none transition-colors placeholder:text-[#555555] focus:bg-[#202124]"
             />
@@ -98,7 +171,11 @@ export function AuthForm({ mode }: AuthFormProps) {
             <div className="relative">
               <input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
+                autoComplete={
+                  mode === "register" ? "new-password" : "current-password"
+                }
                 placeholder={content.passwordPlaceholder}
                 className="w-full bg-[#1A1B1E] py-2.5 pl-3.5 pr-10 text-[13px] text-white outline-none transition-colors placeholder:text-[#555555] focus:bg-[#202124]"
               />
@@ -125,6 +202,12 @@ export function AuthForm({ mode }: AuthFormProps) {
             ) : null}
           </div>
           </MotionItem>
+
+          {formError ? (
+            <p className="text-[12px] leading-relaxed text-red-300" role="alert">
+              {formError}
+            </p>
+          ) : null}
 
           <MotionItem staggered>
           <div className="mb-8 flex items-center justify-between gap-6">
@@ -162,9 +245,10 @@ export function AuthForm({ mode }: AuthFormProps) {
           <MotionItem staggered>
           <MotionButton
             type="submit"
+            disabled={submitting}
             className="w-full rounded-lg bg-white py-2.5 text-[14px] font-semibold text-black transition-colors hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-[#121214]"
           >
-            {content.submitLabel}
+            {submitting ? "Processando..." : content.submitLabel}
           </MotionButton>
           </MotionItem>
 
@@ -172,12 +256,12 @@ export function AuthForm({ mode }: AuthFormProps) {
           <div className="mt-4 text-center">
             <span className="text-[12px] text-[#888888]">
               {content.switchText}{" "}
-              <a
+              <Link
                 href={content.switchHref}
                 className="font-medium text-white hover:underline"
               >
                 {content.switchLabel}
-              </a>
+              </Link>
             </span>
           </div>
           </MotionItem>
