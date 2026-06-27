@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api/client";
+import { canUseDevFallback } from "@/lib/env/is-dev-fallback-enabled";
 import { clientFiles as fallbackClientFiles } from "@/data/client-portal/client-portal-mock-data";
 import type { ClientFile } from "@/types/client-portal";
 import { uploadSecureFile, type FileAssetDto } from "./uploads.service";
@@ -40,8 +41,11 @@ export async function listClientFiles(): Promise<ClientFilesResult> {
   try {
     const assets = await apiRequest<FileAssetDto[]>("/client/files");
     return { files: assets.map(mapFileAssetToClientFile), source: "api" };
-  } catch {
-    return { files: fallbackClientFiles, source: "mock" };
+  } catch (error) {
+    if (canUseDevFallback("frontend/client-files")) {
+      return { files: fallbackClientFiles, source: "mock" };
+    }
+    throw error;
   }
 }
 

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { isApiError } from "@/lib/api/client";
+import { canUseDevFallback, isDevFallbackEnabled } from "@/lib/env/is-dev-fallback-enabled";
 import {
   getClientSession,
   loginClient,
@@ -75,7 +76,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setClient(null);
       if (!isApiError(error) || error.status !== 401) {
-        setDevFallback(process.env.NODE_ENV !== "production");
+        setDevFallback(isDevFallbackEnabled());
       }
     } finally {
       setLoading(false);
@@ -132,9 +133,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
       logout,
       refreshSession,
       loginMock(input) {
-        if (process.env.NODE_ENV === "production") {
-          throw new Error("devFallback nao esta disponivel em producao.");
-        }
+        canUseDevFallback("frontend/auth-provider");
         const fallbackName = input.email.split("@")[0] || "Cliente Ateliux";
 
         setUser({

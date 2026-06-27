@@ -1,12 +1,32 @@
 import type { Metadata } from "next";
 import { BlogPage } from "../../components/blog/BlogPage";
+import { blogArticles } from "../../content/blog";
+import { toBlogPost } from "../../lib/blog/api-blog-adapters";
+import { canUseDevFallback } from "../../lib/env/is-dev-fallback-enabled";
+import { listPublishedBlogPosts } from "../../services/blog.service";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Blog — Ateliux",
+  title: "Blog - Ateliux",
   description:
-    "Conteúdos sobre software, design, e-commerce, SaaS, dashboards, automações e ecossistemas digitais.",
+    "Conteudos sobre software, design, e-commerce, SaaS, dashboards, automacoes e ecossistemas digitais.",
 };
 
-export default function BlogRoute() {
-  return <BlogPage />;
+export default async function BlogRoute() {
+  let posts;
+  let error = "";
+
+  try {
+    posts = (await listPublishedBlogPosts()).map(toBlogPost);
+  } catch (loadError) {
+    if (canUseDevFallback("frontend/public-blog")) {
+      posts = blogArticles.map((article) => article);
+      error = "Usando fallback de desenvolvimento porque a API do blog nao respondeu.";
+    } else {
+      error = loadError instanceof Error ? loadError.message : "Nao foi possivel carregar o blog agora.";
+    }
+  }
+
+  return <BlogPage posts={posts} error={error} />;
 }

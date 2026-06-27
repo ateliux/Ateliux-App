@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Download, Eye, FilePlus2, Upload } from "lucide-react";
 import type { ClientFile } from "@/types/client-portal";
-import { clientProjects } from "@/data/client-portal/client-portal-mock-data";
+import { EmptyState } from "@/components/states/EmptyState";
+import { ErrorState } from "@/components/states/ErrorState";
+import { LoadingState } from "@/components/states/LoadingState";
 import { ClientPortalBadge } from "@/components/client-portal/ui/ClientPortalBadge";
 import { ClientPortalButton } from "@/components/client-portal/ui/ClientPortalButton";
 import { ClientPortalCard } from "@/components/client-portal/ui/ClientPortalCard";
@@ -15,6 +17,12 @@ import {
   listClientFiles,
   uploadClientFile,
 } from "@/services/client-files.service";
+import { listClientProjects } from "@/services/client-projects.service";
+
+type ProjectOption = {
+  id: string;
+  name: string;
+};
 
 const statusLabel: Record<ClientFile["status"], string> = {
   available: "Disponivel",
@@ -36,9 +44,12 @@ const statusVariant: Record<ClientFile["status"], "neutral" | "success" | "warni
 
 export function ClientFilesPage() {
   const [files, setFiles] = useState<ClientFile[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [source, setSource] = useState<"api" | "mock">("api");
   const [origin, setOrigin] = useState<"all" | ClientFile["origin"]>("all");
   const [type, setType] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -50,17 +61,31 @@ export function ClientFilesPage() {
     window.setTimeout(() => setToast(""), 3200);
   };
 
-  useEffect(() => {
-    let active = true;
-    listClientFiles().then((result) => {
-      if (!active) return;
-      setFiles(result.files);
-      setSource(result.source);
-    });
-    return () => {
-      active = false;
-    };
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [filesResult, projectItems] = await Promise.all([
+        listClientFiles(),
+        listClientProjects<ProjectOption>().catch(() => []),
+      ]);
+      setFiles(filesResult.files);
+      setSource(filesResult.source);
+      setProjects(projectItems);
+    } catch (requestError) {
+      setFiles([]);
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar arquivos.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadData();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadData]);
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -130,11 +155,14 @@ export function ClientFilesPage() {
 
       {source === "mock" ? (
         <p className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-          API real indisponivel ou sessao expirada. Exibindo arquivos mockados.
+          Usando fallback de desenvolvimento porque a API nao respondeu.
         </p>
       ) : null}
 
-      <div className="mb-6 flex flex-wrap gap-3">
+      {loading ? <LoadingState title="Carregando arquivos" /> : null}
+      {!loading && error ? <ErrorState description={error} onRetry={loadData} /> : null}
+
+      {!loading && !error ? <div className="mb-6 flex flex-wrap gap-3">
         <select value={origin} onChange={(event) => setOrigin(event.target.value as typeof origin)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm">
           <option value="all">Todas as origens</option>
           <option>Cliente</option>
@@ -144,9 +172,11 @@ export function ClientFilesPage() {
           <option value="all">Todos os tipos</option>
           {types.map((item) => <option key={item}>{item}</option>)}
         </select>
-      </div>
+      </div> : null}
 
-      <ClientPortalCard className="overflow-x-auto">
+      {!loading && !error && !visible.length ? <EmptyState title="Nenhum arquivo encontrado." description="Arquivos enviados e entregas aprovadas aparecerao aqui." /> : null}
+
+      {!loading && !error && visible.length ? <ClientPortalCard className="overflow-x-auto">
         <table className="w-full min-w-[860px] text-left">
           <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400">
             <tr>
@@ -184,7 +214,7 @@ export function ClientFilesPage() {
             ))}
           </tbody>
         </table>
-      </ClientPortalCard>
+      </ClientPortalCard> : null}
 
       {uploadOpen ? (
         <ClientPortalModal title="Enviar novo arquivo" description="O arquivo sera enviado para o backend seguro de uploads." onClose={() => setUploadOpen(false)}>
@@ -198,7 +228,7 @@ export function ClientFilesPage() {
               Projeto opcional
               <select name="projectId" defaultValue="" className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 <option value="">Sem vinculo de projeto</option>
-                {clientProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
               </select>
             </label>
             <div className="flex justify-end gap-3">

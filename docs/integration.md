@@ -35,6 +35,7 @@ REDIS_PORT=6379
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:3001/api
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_ENABLE_DEV_FALLBACK=true
 ```
 
 `admin/.env.local`:
@@ -42,7 +43,10 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:3001/api
 NEXT_PUBLIC_ADMIN_URL=http://localhost:3002
+NEXT_PUBLIC_ENABLE_DEV_FALLBACK=true
 ```
+
+`NEXT_PUBLIC_ENABLE_DEV_FALLBACK` deve existir somente em desenvolvimento local. Em producao, a ausencia da flag bloqueia uso silencioso de mocks e as telas exibem estado de erro/empty state quando a API falha.
 
 ## Banco e seed
 
@@ -212,7 +216,7 @@ Blog API:
 - `POST /admin/blog/posts/:id/unpublish`
 - `POST /admin/blog/posts/:id/archive`
 
-As telas publicas de blog e o CRUD visual de blog na admin ainda mantem conteudo local/fallback visual ate migracao tela a tela.
+As telas publicas `/blog` e `/blog/[slug]` usam a API publica de blog. O conteudo local permanece somente como fallback de desenvolvimento quando `NEXT_PUBLIC_ENABLE_DEV_FALLBACK=true`. O CRUD visual de blog na admin usa a API administrativa com fallback apenas em desenvolvimento.
 
 ## Admin conectado
 
@@ -222,13 +226,13 @@ Conectado a API real com fallback explicito em desenvolvimento:
 - Clientes: listar, criar, editar, arquivar/inativar, alterar status e convite
 - Caixa de Entrada
 - Revisao de arquivos
+- BlogManagementView: listar, criar, editar, publicar/despublicar, arquivar, duplicar e excluir
+- NewsletterManagementView: listar, criar via subscribe, alterar status, exportar e remover
+- PortalManagementView: clientes, projetos, briefings, etapas, aprovacoes, solicitacoes, arquivos, previews, cronograma, financeiro e historico com `clientId` e `projectId`
 
 Ainda mockado ou parcialmente conectado:
 
 - Dashboard geral
-- PortalManagementView por secoes completas
-- BlogManagementView visual
-- NewsletterManagementView visual
 - Suporte legado administrativo
 - Calendario, funcionarios, desempenho, folha, licencas e recrutamento
 
@@ -240,30 +244,47 @@ Conectado a API real com fallback explicito em desenvolvimento:
 - Arquivos
 - Solicitacoes
 - Suporte
-
-Ainda mockado ou parcialmente conectado:
-
-- Visao geral
-- Projeto
+- Meu projeto
 - Etapas
 - Aprovacoes
 - Previews
 - Cronograma
 - Financeiro
 - Historico
-- Equipe
-- Notificacoes visuais do topbar
+- Notificacoes do painel lateral e contador real no topbar
+- Visao geral composta por projetos, arquivos, solicitacoes, aprovacoes, cronograma, financeiro, historico, notificacoes e equipe
+- Equipe via `GET /client/team`
+- Identidade/projeto exibidos no topbar via sessao e projetos reais
+
+Ainda mockado ou parcialmente conectado:
+
+- Conteudo institucional/CMS publico que ainda e estatico por design
 
 ## Fallbacks mockados
 
-Fallbacks permanecem somente para desenvolvimento quando API ou sessao nao responder:
+Fallbacks permanecem somente para desenvolvimento quando API ou sessao nao responder e quando `NEXT_PUBLIC_ENABLE_DEV_FALLBACK=true`:
 
 - `frontend/components/client-portal/files/ClientFilesPage.tsx`
 - `frontend/components/client-portal/requests/ClientRequestsPage.tsx`
 - `frontend/components/client-portal/support/ClientSupportPage.tsx`
+- `frontend/components/client-portal/project/ClientProjectPage.tsx`
+- `frontend/components/client-portal/stages/ClientStagesPage.tsx`
+- `frontend/components/client-portal/approvals/ClientApprovalsPage.tsx`
+- `frontend/components/client-portal/preview/ClientPreviewPage.tsx`
+- `frontend/components/client-portal/schedule/ClientSchedulePage.tsx`
+- `frontend/components/client-portal/billing/ClientBillingPage.tsx`
+- `frontend/components/client-portal/history/ClientHistoryPage.tsx`
+- `frontend/components/client-portal/layout/ClientPortalNotifications.tsx`
+- `frontend/components/client-portal/overview/ClientOverviewPage.tsx`
+- `frontend/components/client-portal/team/ClientTeamPage.tsx`
+- `frontend/app/blog/page.tsx`
+- `frontend/app/blog/[slug]/page.tsx`
 - `admin/components/admin/views/ClientsManagementView.tsx`
 - `admin/components/admin/views/FileReviewView.tsx`
 - `admin/components/admin/views/InboxView.tsx`
+- `admin/components/admin/views/BlogManagementView.tsx`
+- `admin/components/admin/views/NewsletterManagementView.tsx`
+- `admin/components/admin/views/PortalManagementView.tsx`
 
 Mocks ainda estruturais:
 
@@ -274,6 +295,34 @@ Mocks ainda estruturais:
 
 Esses mocks nao devem ser tratados como producao.
 
+## Mapa de fallbacks e mocks restantes
+
+| Projeto | Arquivo | Modulo | Tipo de fallback | Endpoint real equivalente | Status | Pode existir em dev? | Bloqueado em producao? | Acao necessaria |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| frontend | `components/auth/MockAuthProvider.tsx` | Auth cliente | fallback visual de sessao | `/auth/client/*` | parcialmente conectado | sim, com flag | sim | remover provider mock quando auth estiver final |
+| frontend | `components/client-portal/files/ClientFilesPage.tsx` | Arquivos | mock em falha de API | `/client/files`, `/uploads` | conectado | sim, com flag | sim | validar browser com storage real |
+| frontend | `components/client-portal/requests/ClientRequestsPage.tsx` | Solicitacoes | mock em falha de API | `/client/requests` | conectado | sim, com flag | sim | adicionar testes browser |
+| frontend | `components/client-portal/support/ClientSupportPage.tsx` | Suporte cliente | mock em falha de API | `/client/support/tickets` | conectado | sim, com flag | sim | adicionar testes browser |
+| frontend | `components/client-portal/project/ClientProjectPage.tsx` | Projeto | mock em falha de API | `/client/projects`, `/client/projects/:id` | conectado | sim, com flag | sim | enriquecer DTO real com blocos de escopo |
+| frontend | `components/client-portal/stages/ClientStagesPage.tsx` | Etapas | mock em falha de API | `/client/projects/:id/stages` | conectado | sim, com flag | sim | validar selecao multi-projeto |
+| frontend | `components/client-portal/approvals/ClientApprovalsPage.tsx` | Aprovacoes | mock em falha de API | `/client/approvals` | conectado | sim, com flag | sim | persistir comentarios de preview se virar requisito |
+| frontend | `components/client-portal/preview/ClientPreviewPage.tsx` | Previews | mock em falha de API | `/client/previews` | conectado | sim, com flag | sim | decidir persistencia de comentario de preview |
+| frontend | `components/client-portal/schedule/ClientSchedulePage.tsx` | Cronograma | mock em falha de API | `/client/schedule` | conectado | sim, com flag | sim | validar eventos por projeto |
+| frontend | `components/client-portal/billing/ClientBillingPage.tsx` | Financeiro | mock em falha de API | `/client/finance` | conectado | sim, com flag | sim | conectar recibo por signed URL |
+| frontend | `components/client-portal/history/ClientHistoryPage.tsx` | Historico | mock em falha de API | `/client/history` | conectado | sim, com flag | sim | aumentar cobertura de audit log |
+| frontend | `components/client-portal/layout/ClientPortalNotifications.tsx` | Notificacoes | mock em falha de API | `/client/notifications` | conectado | sim, com flag | sim | validar browser com contador real no topbar |
+| frontend | `components/client-portal/overview/ClientOverviewPage.tsx` | Visao geral | mock em falha de API | composicao `/client/projects`, `/client/files`, `/client/requests`, `/client/approvals`, `/client/schedule`, `/client/finance`, `/client/history`, `/client/notifications`, `/client/team` | conectado | sim, com flag | sim | adicionar teste browser de dashboard |
+| frontend | `components/client-portal/team/ClientTeamPage.tsx` | Equipe | mock em falha de API | `/client/team` | conectado | sim, com flag | sim | enriquecer avatar/cargo no backend se necessario |
+| frontend | `content/blog/blog-content.ts` | Blog publico | conteudo local em fallback dev | `/blog/posts`, `/blog/posts/:id` | conectado | sim, com flag | sim | remover fallback local quando CMS/API estiver estavel |
+| frontend | `data/crm/crm-mock-data.ts` | CRM legado | mock estrutural | indefinido | pendente | sim | nao aplicavel ainda | decidir remover ou virar produto |
+| admin | `components/admin/views/ClientsManagementView.tsx` | Clientes | mock em falha de API | `/admin/clients` | conectado | sim, com flag | sim | validar permissoes por papel |
+| admin | `components/admin/views/InboxView.tsx` | Inbox | mock em falha de API | `/admin/inbox/conversations` | conectado | sim, com flag | sim | completar criacao/anexo real |
+| admin | `components/admin/views/FileReviewView.tsx` | Revisao de arquivos | mock em falha de API | `/admin/files` | conectado | sim, com flag | sim | validar storage real |
+| admin | `components/admin/views/BlogManagementView.tsx` | Blog admin | mock em falha de API | `/admin/blog/posts` | conectado | sim, com flag | sim | criar upload de capa/editor final |
+| admin | `components/admin/views/NewsletterManagementView.tsx` | Newsletter admin | mock em falha de API | `/admin/newsletter/subscribers` | conectado | sim, com flag | sim | ajustar export CSV final |
+| admin | `components/admin/views/PortalManagementView.tsx` | Portal admin | fallback somente em falha controlada | `/admin/projects`, `/admin/briefings`, `/admin/stages`, `/admin/approvals`, `/admin/requests`, `/admin/files`, `/admin/previews`, `/admin/schedule`, `/admin/finance`, `/admin/history` | conectado | sim, com flag | sim | adicionar testes browser para acoes reais |
+| admin | `data/admin/admin-mock-data.ts` | Modulos internos | mock estrutural | varios `/admin/*` | pendente | sim | nao aplicavel ainda | substituir dashboard, suporte legado e RH |
+
 ## Como testar localmente
 
 1. Subir PostgreSQL e Redis.
@@ -281,15 +330,12 @@ Esses mocks nao devem ser tratados como producao.
 3. Em `frontend`: `npm install`, `npm run dev`.
 4. Em `admin`: `npm install`, `npm run dev -- -p 3002`.
 5. Entrar no frontend em `/login` com um cliente da seed.
-6. Validar `/cliente/arquivos`, `/cliente/solicitacoes` e `/cliente/suporte`.
+6. Validar `/cliente/visao-geral`, `/cliente/projeto`, `/cliente/equipe`, `/cliente/arquivos`, `/cliente/solicitacoes`, `/cliente/suporte`, `/cliente/etapas`, `/cliente/aprovacoes`, `/cliente/previa`, `/cliente/cronograma`, `/cliente/financeiro` e `/cliente/historico`.
 7. Entrar na admin com `admin@ateliux.com.br`.
-8. Validar clientes, inbox e revisao de arquivos.
+8. Validar clientes, inbox, revisao de arquivos, blog, newsletter e Portal do Cliente admin.
 
 ## Pendencias de migracao
 
-- Conectar visualmente todas as secoes do Portal do Cliente aos endpoints ja existentes.
-- Migrar `PortalManagementView` da admin por secao, preservando `clientId` e `projectId`.
-- Migrar `BlogManagementView` e `NewsletterManagementView` para API real.
 - Criar tela admin dedicada para leads de contato ou integrar leads na inbox.
 - Adicionar testes negativos por papel administrativo especifico alem do papel `ADMIN`.
 - Configurar Cloudinary/SMTP reais antes de qualquer ambiente de staging.

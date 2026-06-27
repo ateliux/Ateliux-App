@@ -8,7 +8,7 @@ Auditoria operacional antes de colocar o ecossistema Ateliux em staging/producao
 - Migration `20260626200000_contact_lead_file_asset` aplicada com `prisma migrate deploy`.
 - Seed idempotente validada para admins, clientes, projetos, arquivos, requests, inbox, portal, blog e newsletter.
 - E2E por API validou cliente, admin, revisao de arquivo, solicitacoes, suporte, contato e newsletter.
-- Frontend e admin ainda possuem fallbacks mockados em modulos nao totalmente migrados.
+- Frontend e admin possuem fallbacks de desenvolvimento controlados por `NEXT_PUBLIC_ENABLE_DEV_FALLBACK=true`; os fluxos principais de portal, blog publico, blog admin, newsletter, inbox, clientes e arquivos ja consomem API real.
 
 ## Checklist obrigatorio
 
@@ -64,21 +64,21 @@ Auditoria operacional antes de colocar o ecossistema Ateliux em staging/producao
 ### Frontend
 
 - Login/cadastro visual integrado ao backend.
-- Portal conectado em arquivos, solicitacoes e suporte.
-- Pendente migrar visao geral, projeto, etapas, aprovacoes, previews, cronograma, financeiro, historico, equipe e notificacoes.
-- Remover fallback mockado antes de producao ou bloquear por flag clara de desenvolvimento.
+- Portal conectado em visao geral, projeto, equipe, arquivos, solicitacoes, suporte, etapas, aprovacoes, previews, cronograma, financeiro, historico, notificacoes laterais e contador real no topbar.
+- Fallback mockado de telas conectadas depende de `NEXT_PUBLIC_ENABLE_DEV_FALLBACK=true` e nao roda em producao.
+- Blog publico `/blog` e `/blog/[slug]` consome API real com fallback apenas em desenvolvimento.
 
 ### Admin
 
-- Clientes, inbox e revisao de arquivos conectados.
-- Pendente migrar dashboard, PortalManagementView por modulo, blog/newsletter visual, suporte legado e modulos internos.
-- Fallback mockado deve ficar indisponivel em producao.
+- Clientes, inbox, revisao de arquivos, blog, newsletter e PortalManagementView conectados.
+- Fallback mockado de telas conectadas depende de `NEXT_PUBLIC_ENABLE_DEV_FALLBACK=true` e nao roda em producao.
+- Pendente migrar dashboard geral, suporte legado e modulos internos de RH/operacao.
 
 ### Blog e newsletter
 
 - API de blog e newsletter existe.
 - Newsletter publica validada por API.
-- Pendente ligar telas visuais de blog/admin blog ao backend.
+- Blog publico, blog admin e newsletter admin ligados ao backend.
 - Definir se comentarios de blog serao reais, moderados ou removidos.
 
 ### Observabilidade
@@ -124,8 +124,8 @@ npm run build
 
 - Configurar storage real.
 - Configurar e-mail real.
-- Remover ou bloquear fallback mockado em producao.
-- Completar migracao visual dos modulos principais do Portal do Cliente e admin.
+- Manter `NEXT_PUBLIC_ENABLE_DEV_FALLBACK` ausente/desativado em producao.
+- Completar migracao do dashboard geral, suporte legado e modulos internos que ainda nao fazem parte do fluxo principal de portal.
 - Criar testes de permissao por papel.
 - Validar CORS/cookies nos dominios reais.
 - Rodar auditoria de dependencias.
@@ -134,4 +134,5 @@ npm run build
 
 - Fallback local para assets de seed quando Cloudinary nao esta configurado.
 - Dados mockados para telas ainda nao migradas.
+- `NEXT_PUBLIC_ENABLE_DEV_FALLBACK=true` somente em ambiente local.
 - Testes E2E por API sem automacao browser completa.

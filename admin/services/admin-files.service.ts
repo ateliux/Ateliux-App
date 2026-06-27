@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api/client";
+import { canUseDevFallback } from "@/lib/env/is-dev-fallback-enabled";
 import {
   PORTAL_CLIENTS,
   PORTAL_FILES_SCOPED,
@@ -104,9 +105,35 @@ export async function listAdminFiles(): Promise<AdminFilesResult> {
   try {
     const files = await apiRequest<AdminFileAsset[]>("/admin/files");
     return { files, source: "api" };
-  } catch {
-    return { files: fallbackFiles(), source: "mock" };
+  } catch (error) {
+    if (canUseDevFallback("admin/files")) {
+      return { files: fallbackFiles(), source: "mock" };
+    }
+    throw error;
   }
+}
+
+export async function createAdminFileAsset(input: {
+  clientId?: string;
+  projectId?: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  storageProvider: string;
+  storageKey: string;
+  url: string;
+  originalName?: string;
+  extension?: string;
+  origin?: AdminFileOrigin;
+  uploadedByType?: "CLIENT" | "ADMIN" | "PUBLIC" | "SYSTEM";
+  context?: AdminFileContext;
+  visibility?: AdminFileVisibility;
+  status?: AdminFileStatus;
+}) {
+  return apiRequest<AdminFileAsset>("/admin/files", {
+    method: "POST",
+    json: input,
+  });
 }
 
 export async function listPendingReviewFiles() {

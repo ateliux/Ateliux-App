@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { RequestUser } from '../common/utils/request-user';
+import type { CreateManualHistoryNoteDto } from './dto/create-manual-history-note.dto';
 
 export type CreateAuditLogInput = {
   actorId?: string;
@@ -41,6 +43,30 @@ export class AuditLogsService {
       orderBy: { createdAt: 'desc' },
       take: 200,
       include: { client: true, project: true },
+    });
+  }
+
+  findClientHistory(user: RequestUser) {
+    return this.prisma.auditLog.findMany({
+      where: { clientId: user.clientId },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: { client: true, project: true },
+    });
+  }
+
+  createManualNote(user: RequestUser, dto: CreateManualHistoryNoteDto) {
+    return this.create({
+      actorId: user.adminUserId ?? user.id,
+      actorType: 'admin',
+      action: dto.title ?? 'MANUAL_HISTORY_NOTE',
+      entityType: 'HistoryNote',
+      clientId: dto.clientId,
+      projectId: dto.projectId,
+      metadata: {
+        title: dto.title,
+        description: dto.description,
+      },
     });
   }
 

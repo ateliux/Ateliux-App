@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Clock3, LifeBuoy, Mail, MessageSquarePlus, Paperclip } from "lucide-react";
 import { clientSupportTickets as initialTickets } from "@/data/client-portal/client-portal-mock-data";
+import { canUseDevFallback } from "@/lib/env/is-dev-fallback-enabled";
+import { EmptyState } from "@/components/states/EmptyState";
+import { ErrorState } from "@/components/states/ErrorState";
+import { LoadingState } from "@/components/states/LoadingState";
 import type { ClientPriority, ClientSupportTicket, ClientTicketStatus } from "@/types/client-portal";
 import { ClientPortalBadge } from "@/components/client-portal/ui/ClientPortalBadge";
 import { ClientPortalButton } from "@/components/client-portal/ui/ClientPortalButton";
@@ -23,9 +27,11 @@ import {
 const priorityLabel: Record<ClientPriority, string> = { low: "Baixa", medium: "Media", high: "Alta" };
 
 export function ClientSupportPage() {
-  const [tickets, setTickets] = useState<ClientSupportTicket[]>(initialTickets);
-  const [source, setSource] = useState<"api" | "mock">("mock");
+  const [tickets, setTickets] = useState<ClientSupportTicket[]>([]);
+  const [source, setSource] = useState<"api" | "mock">("api");
   const [filter, setFilter] = useState<"all" | ClientTicketStatus>("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
   const [selectedId, setSelectedId] = useState<ClientSupportTicket["id"] | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -38,24 +44,32 @@ export function ClientSupportPage() {
     window.setTimeout(() => setToast(""), 2600);
   };
 
-  useEffect(() => {
-    let active = true;
-    listClientSupportTickets()
-      .then((items) => {
-        if (!active) return;
-        setTickets(items);
-        setSource("api");
-      })
-      .catch(() => {
-        if (!active) return;
+  const loadTickets = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const items = await listClientSupportTickets();
+      setTickets(items);
+      setSource("api");
+    } catch (requestError) {
+      if (canUseDevFallback("frontend/client-support")) {
         setTickets(initialTickets);
         setSource("mock");
-      });
-
-    return () => {
-      active = false;
-    };
+      } else {
+        setTickets([]);
+        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar suporte.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadTickets();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadTickets]);
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -147,11 +161,14 @@ export function ClientSupportPage() {
 
       {source === "mock" ? (
         <p className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-          API real indisponivel ou sessao expirada. Exibindo suporte mockado.
+          Usando fallback de desenvolvimento porque a API nao respondeu.
         </p>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
+      {loading ? <LoadingState title="Carregando suporte" /> : null}
+      {!loading && error ? <ErrorState description={error} onRetry={loadTickets} /> : null}
+
+      {!loading && !error ? <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div>
           <div className="mb-5 flex flex-wrap gap-2">
             {([
@@ -168,7 +185,7 @@ export function ClientSupportPage() {
           </div>
 
           <div className="space-y-4">
-            {visible.map((ticket) => (
+            {visible.length ? visible.map((ticket) => (
               <button key={ticket.id} type="button" onClick={() => setSelectedId(ticket.id)} className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-black">
                 <ClientPortalCard className="p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -185,7 +202,7 @@ export function ClientSupportPage() {
                   <p className="mt-4 line-clamp-2 text-sm leading-6 text-slate-500">{ticket.messages.at(-1)?.message}</p>
                 </ClientPortalCard>
               </button>
-            ))}
+            )) : <EmptyState title="Nenhum ticket encontrado." description="Abra uma nova mensagem para falar com a Ateliux." />}
           </div>
         </div>
 
@@ -204,7 +221,7 @@ export function ClientSupportPage() {
             <p className="text-xs text-zinc-400">Suporte ao cliente</p>
           </ClientPortalCard>
         </aside>
-      </div>
+      </div> : null}
 
       {creating ? (
         <ClientPortalModal title="Nova mensagem" description="Abra um ticket relacionado ao seu projeto. Anexos passam pelo upload seguro antes do ticket ser criado." onClose={() => setCreating(false)} size="lg">

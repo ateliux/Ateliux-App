@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Check, Circle, Clock3, LockKeyhole } from "lucide-react";
 import { clientStages } from "@/data/client-portal/client-portal-mock-data";
+import { canUseDevFallback } from "@/lib/env/is-dev-fallback-enabled";
+import { toClientStage } from "@/lib/client-portal/api-adapters";
+import { listClientProjects } from "@/services/client-projects.service";
+import { listClientProjectStages } from "@/services/client-stages.service";
 import type { ClientProjectStage, ClientStageStatus } from "@/types/client-portal";
+import { EmptyState } from "@/components/states/EmptyState";
+import { ErrorState } from "@/components/states/ErrorState";
+import { LoadingState } from "@/components/states/LoadingState";
 import { ClientPortalBadge } from "@/components/client-portal/ui/ClientPortalBadge";
 import { ClientPortalButton } from "@/components/client-portal/ui/ClientPortalButton";
 import { ClientPortalCard } from "@/components/client-portal/ui/ClientPortalCard";
@@ -17,6 +24,38 @@ const filters: { label: string; value: "all" | ClientStageStatus }[] = [{ label:
 export function ClientStagesPage() {
   const [filter, setFilter] = useState<"all" | ClientStageStatus>("all");
   const [selected, setSelected] = useState<ClientProjectStage | null>(null);
-  const stages = filter === "all" ? clientStages : clientStages.filter((item) => item.status === filter);
-  return <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8"><ClientPortalPageHeader eyebrow="Processo Ateliux" title="Etapas do projeto" description="Acompanhe o que ja foi concluido, o que esta em andamento e o que depende da sua aprovacao." /><div className="mb-6 flex flex-wrap gap-2">{filters.map((item) => <button key={item.value} type="button" onClick={() => setFilter(item.value)} className={`rounded-xl px-4 py-2 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-black ${filter === item.value ? "bg-black text-white" : "border border-slate-200 bg-white text-slate-600"}`}>{item.label}</button>)}</div><ClientPortalCard className="p-5 sm:p-7"><div className="space-y-0">{stages.map((stage, index) => <div key={stage.id} className="relative grid gap-4 pb-8 pl-12 last:pb-0 sm:grid-cols-[1fr_auto]">{index < stages.length - 1 ? <span className="absolute left-[17px] top-9 h-[calc(100%-12px)] w-px bg-slate-200" /> : null}<span className={`absolute left-0 top-0 grid h-9 w-9 place-items-center rounded-full border ${stage.status === "completed" ? "border-black bg-black text-white" : stage.status === "in_progress" ? "border-black bg-white text-black" : stage.status === "blocked" ? "border-rose-200 bg-rose-50 text-rose-600" : "border-slate-200 bg-white text-slate-400"}`}>{stage.status === "completed" ? <Check className="h-4 w-4" /> : stage.status === "blocked" ? <LockKeyhole className="h-4 w-4" /> : stage.status === "in_progress" ? <Clock3 className="h-4 w-4" /> : <Circle className="h-3 w-3" />}</span><button type="button" onClick={() => setSelected(stage)} className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-black"><div className="flex flex-wrap items-center gap-3"><h2 className="font-bold text-slate-900">{stage.order}. {stage.title}</h2><ClientPortalBadge variant={statusVariant(stage.status)}>{stageStatusLabel[stage.status]}</ClientPortalBadge></div><p className="mt-2 text-sm leading-6 text-slate-500">{stage.description}</p><p className="mt-2 text-xs text-slate-400">Responsavel: {stage.responsible}</p></button><div className="sm:text-right"><p className="text-[10px] uppercase tracking-wider text-slate-400">Previsao</p><p className="mt-1 text-xs font-semibold text-slate-700">{stage.expectedDate}</p><button type="button" onClick={() => setSelected(stage)} className="mt-3 text-xs font-semibold text-black">Ver detalhes</button></div></div>)}</div></ClientPortalCard>{selected ? <ClientPortalModal title={selected.title} description={selected.description} onClose={() => setSelected(null)}><div className="grid gap-4 sm:grid-cols-2"><div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Status</p><div className="mt-2"><ClientPortalBadge variant={statusVariant(selected.status)}>{stageStatusLabel[selected.status]}</ClientPortalBadge></div></div><div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Responsavel</p><p className="mt-2 text-sm font-semibold text-slate-900">{selected.responsible}</p></div><div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Data prevista</p><p className="mt-2 text-sm font-semibold text-slate-900">{selected.expectedDate}</p></div><div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Conclusao</p><p className="mt-2 text-sm font-semibold text-slate-900">{selected.completedDate ?? "Ainda nao concluida"}</p></div><p className="text-sm leading-6 text-slate-600 sm:col-span-2">{selected.notes}</p>{selected.requiresApproval ? <div className="flex justify-end sm:col-span-2"><Link href="/cliente/aprovacoes" className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white">Ir para aprovacoes<ArrowRight className="h-4 w-4" /></Link></div> : <div className="flex justify-end sm:col-span-2"><ClientPortalButton onClick={() => setSelected(null)}>Entendi</ClientPortalButton></div>}</div></ClientPortalModal> : null}</div>;
+  const [allStages, setAllStages] = useState<ClientProjectStage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const loadStages = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const projects = await listClientProjects<Record<string, unknown>>();
+      const projectId = typeof projects[0]?.id === "string" ? projects[0].id : "";
+      if (!projectId) {
+        setAllStages([]);
+        return;
+      }
+      const response = await listClientProjectStages<Record<string, unknown>>(projectId);
+      setAllStages(response.map(toClientStage));
+    } catch (loadError) {
+      if (canUseDevFallback("frontend/client-stages")) {
+        setAllStages(clientStages);
+      } else {
+        setAllStages([]);
+        setError(loadError instanceof Error ? loadError.message : "Nao foi possivel carregar as etapas.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadStages();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadStages]);
+  const stages = filter === "all" ? allStages : allStages.filter((item) => item.status === filter);
+  return <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8"><ClientPortalPageHeader eyebrow="Processo Ateliux" title="Etapas do projeto" description="Acompanhe o que ja foi concluido, o que esta em andamento e o que depende da sua aprovacao." /><div className="mb-6 flex flex-wrap gap-2">{filters.map((item) => <button key={item.value} type="button" onClick={() => setFilter(item.value)} className={`rounded-xl px-4 py-2 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-black ${filter === item.value ? "bg-black text-white" : "border border-slate-200 bg-white text-slate-600"}`}>{item.label}</button>)}</div>{loading ? <LoadingState title="Carregando etapas" /> : error ? <ErrorState title="Nao foi possivel carregar as etapas" description={error} onRetry={loadStages} /> : stages.length === 0 ? <EmptyState title="Nenhuma etapa publicada" description="As etapas visiveis para o cliente aparecerao aqui quando forem enviadas pela Ateliux." /> : <ClientPortalCard className="p-5 sm:p-7"><div className="space-y-0">{stages.map((stage, index) => <div key={stage.apiId ?? stage.id} className="relative grid gap-4 pb-8 pl-12 last:pb-0 sm:grid-cols-[1fr_auto]">{index < stages.length - 1 ? <span className="absolute left-[17px] top-9 h-[calc(100%-12px)] w-px bg-slate-200" /> : null}<span className={`absolute left-0 top-0 grid h-9 w-9 place-items-center rounded-full border ${stage.status === "completed" ? "border-black bg-black text-white" : stage.status === "in_progress" ? "border-black bg-white text-black" : stage.status === "blocked" ? "border-rose-200 bg-rose-50 text-rose-600" : "border-slate-200 bg-white text-slate-400"}`}>{stage.status === "completed" ? <Check className="h-4 w-4" /> : stage.status === "blocked" ? <LockKeyhole className="h-4 w-4" /> : stage.status === "in_progress" ? <Clock3 className="h-4 w-4" /> : <Circle className="h-3 w-3" />}</span><button type="button" onClick={() => setSelected(stage)} className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-black"><div className="flex flex-wrap items-center gap-3"><h2 className="font-bold text-slate-900">{stage.order}. {stage.title}</h2><ClientPortalBadge variant={statusVariant(stage.status)}>{stageStatusLabel[stage.status]}</ClientPortalBadge></div><p className="mt-2 text-sm leading-6 text-slate-500">{stage.description}</p><p className="mt-2 text-xs text-slate-400">Responsavel: {stage.responsible}</p></button><div className="sm:text-right"><p className="text-[10px] uppercase tracking-wider text-slate-400">Previsao</p><p className="mt-1 text-xs font-semibold text-slate-700">{stage.expectedDate}</p><button type="button" onClick={() => setSelected(stage)} className="mt-3 text-xs font-semibold text-black">Ver detalhes</button></div></div>)}</div></ClientPortalCard>}{selected ? <ClientPortalModal title={selected.title} description={selected.description} onClose={() => setSelected(null)}><div className="grid gap-4 sm:grid-cols-2"><div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Status</p><div className="mt-2"><ClientPortalBadge variant={statusVariant(selected.status)}>{stageStatusLabel[selected.status]}</ClientPortalBadge></div></div><div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Responsavel</p><p className="mt-2 text-sm font-semibold text-slate-900">{selected.responsible}</p></div><div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Data prevista</p><p className="mt-2 text-sm font-semibold text-slate-900">{selected.expectedDate}</p></div><div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Conclusao</p><p className="mt-2 text-sm font-semibold text-slate-900">{selected.completedDate ?? "Ainda nao concluida"}</p></div><p className="text-sm leading-6 text-slate-600 sm:col-span-2">{selected.notes}</p>{selected.requiresApproval ? <div className="flex justify-end sm:col-span-2"><Link href="/cliente/aprovacoes" className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white">Ir para aprovacoes<ArrowRight className="h-4 w-4" /></Link></div> : <div className="flex justify-end sm:col-span-2"><ClientPortalButton onClick={() => setSelected(null)}>Entendi</ClientPortalButton></div>}</div></ClientPortalModal> : null}</div>;
 }

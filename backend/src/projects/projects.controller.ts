@@ -25,6 +25,12 @@ export class ProjectsController {
   }
 
   @UseGuards(ClientAuthGuard)
+  @Get('client/team')
+  findClientTeam(@CurrentUser() user: RequestUser) {
+    return this.projects.findClientTeam(user);
+  }
+
+  @UseGuards(ClientAuthGuard)
   @Get('client/projects/:id')
   findClientProject(@CurrentUser() user: RequestUser, @Param() params: IdParamDto) {
     return this.projects.findClientProject(user, params.id);

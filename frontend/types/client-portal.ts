@@ -32,6 +32,7 @@ export type ClientProjectBlock = {
 
 export type ClientProject = {
   id: number;
+  apiId?: string;
   name: string;
   type: string;
   plan: string;
@@ -55,6 +56,7 @@ export type ClientProject = {
 
 export type ClientProjectStage = {
   id: number;
+  apiId?: string;
   order: number;
   title: string;
   description: string;
@@ -68,6 +70,7 @@ export type ClientProjectStage = {
 
 export type ClientApproval = {
   id: number;
+  apiId?: string;
   title: string;
   description: string;
   status: ClientApprovalStatus;
@@ -107,6 +110,7 @@ export type ClientFile = {
 
 export type ClientPreview = {
   id: number;
+  apiId?: string;
   page: string;
   status: "available" | "in_review" | "unavailable";
   updatedAt: string;
@@ -116,6 +120,7 @@ export type ClientPreview = {
 
 export type ClientScheduleEvent = {
   id: number;
+  apiId?: string;
   title: string;
   date: string;
   time: string;
@@ -146,16 +151,21 @@ export type ClientSupportTicket = {
 
 export type ClientTeamMember = {
   id: number;
+  apiId?: string;
   name: string;
+  email?: string;
   role: string;
   avatar: string;
   responsibilities: string[];
   status: "available" | "busy";
   contactLabel: string;
+  projectName?: string;
+  areas?: string[];
 };
 
 export type ClientInvoice = {
   id: number;
+  apiId?: string;
   label: string;
   dueDate: string;
   amount: number;
@@ -165,6 +175,7 @@ export type ClientInvoice = {
 
 export type ClientHistoryItem = {
   id: number;
+  apiId?: string;
   date: string;
   time: string;
   type: "project" | "approval" | "request" | "file" | "deployment";

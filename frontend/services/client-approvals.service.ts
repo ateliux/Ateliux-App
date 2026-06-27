@@ -14,6 +14,6 @@ export function approveClientApproval<T = unknown>(id: string, clientComment?: s
 export function requestClientApprovalChanges<T = unknown>(id: string, clientComment: string) {
   return apiRequest<T>(`/client/approvals/${id}/request-changes`, {
     method: "POST",
-    json: { clientComment },
+    json: { comment: clientComment },
   });
 }

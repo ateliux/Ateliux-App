@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Eye, Pencil, Plus, XCircle } from "lucide-react";
 import { clientRequests as initialRequests } from "@/data/client-portal/client-portal-mock-data";
+import { canUseDevFallback } from "@/lib/env/is-dev-fallback-enabled";
+import { EmptyState } from "@/components/states/EmptyState";
+import { ErrorState } from "@/components/states/ErrorState";
+import { LoadingState } from "@/components/states/LoadingState";
 import type { ClientPriority, ClientRequest, ClientRequestStatus } from "@/types/client-portal";
 import { ClientPortalBadge } from "@/components/client-portal/ui/ClientPortalBadge";
 import { ClientPortalButton } from "@/components/client-portal/ui/ClientPortalButton";
@@ -21,9 +25,11 @@ const categoryLabels: Record<ClientRequest["category"], string> = { design: "Des
 const priorityLabels: Record<ClientPriority, string> = { low: "Baixa", medium: "Media", high: "Alta" };
 
 export function ClientRequestsPage() {
-  const [requests, setRequests] = useState<ClientRequest[]>(initialRequests);
-  const [source, setSource] = useState<"api" | "mock">("mock");
+  const [requests, setRequests] = useState<ClientRequest[]>([]);
+  const [source, setSource] = useState<"api" | "mock">("api");
   const [filter, setFilter] = useState<"all" | ClientRequestStatus>("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [modal, setModal] = useState<RequestModal | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState("");
@@ -34,24 +40,32 @@ export function ClientRequestsPage() {
     window.setTimeout(() => setToast(""), 2600);
   };
 
-  useEffect(() => {
-    let active = true;
-    listClientRequests()
-      .then((items) => {
-        if (!active) return;
-        setRequests(items);
-        setSource("api");
-      })
-      .catch(() => {
-        if (!active) return;
+  const loadRequests = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const items = await listClientRequests();
+      setRequests(items);
+      setSource("api");
+    } catch (requestError) {
+      if (canUseDevFallback("frontend/client-requests")) {
         setRequests(initialRequests);
         setSource("mock");
-      });
-
-    return () => {
-      active = false;
-    };
+      } else {
+        setRequests([]);
+        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar solicitacoes.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadRequests();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadRequests]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -120,11 +134,14 @@ export function ClientRequestsPage() {
 
       {source === "mock" ? (
         <p className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-          API real indisponivel ou sessao expirada. Exibindo solicitacoes mockadas.
+          Usando fallback de desenvolvimento porque a API nao respondeu.
         </p>
       ) : null}
 
-      <div className="mb-6 flex flex-wrap gap-2">
+      {loading ? <LoadingState title="Carregando solicitacoes" /> : null}
+      {!loading && error ? <ErrorState description={error} onRetry={loadRequests} /> : null}
+
+      {!loading && !error ? <div className="mb-6 flex flex-wrap gap-2">
         {([
           { label: "Todas", value: "all" },
           { label: "Abertas", value: "open" },
@@ -136,9 +153,11 @@ export function ClientRequestsPage() {
             {item.label}
           </button>
         ))}
-      </div>
+      </div> : null}
 
-      <div className="space-y-4">
+      {!loading && !error && !visible.length ? <EmptyState title="Nenhuma solicitacao encontrada." description="Crie uma nova solicitacao para iniciar o historico." /> : null}
+
+      {!loading && !error && visible.length ? <div className="space-y-4">
         {visible.map((request) => (
           <ClientPortalCard key={request.id} className="p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -159,7 +178,7 @@ export function ClientRequestsPage() {
             </div>
           </ClientPortalCard>
         ))}
-      </div>
+      </div> : null}
 
       {modal?.mode === "create" || modal?.mode === "edit" ? (
         <ClientPortalModal title={modal.mode === "create" ? "Nova solicitacao" : "Editar solicitacao"} description="Anexos passam pelo upload seguro antes da solicitacao ser salva." onClose={() => setModal(null)} size="lg">

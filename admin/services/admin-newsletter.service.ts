@@ -16,6 +16,13 @@ export function listNewsletterSubscribers() {
   return apiRequest<NewsletterSubscriberDto[]>("/admin/newsletter/subscribers");
 }
 
+export function createNewsletterSubscriber(input: { email: string; name?: string; origin?: string; interests?: string[] }) {
+  return apiRequest<NewsletterSubscriberDto>("/newsletter/subscribe", {
+    method: "POST",
+    json: input,
+  });
+}
+
 export function updateNewsletterSubscriber(id: string, input: Partial<Pick<NewsletterSubscriberDto, "name" | "origin" | "status" | "interests">>) {
   return apiRequest<NewsletterSubscriberDto>(`/admin/newsletter/subscribers/${id}`, {
     method: "PATCH",

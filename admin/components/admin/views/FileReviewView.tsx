@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   Clipboard,
@@ -14,6 +14,9 @@ import {
 } from "lucide-react";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { Badge } from "@/components/admin/ui/Badge";
+import { EmptyState } from "@/components/admin/ui/EmptyState";
+import { ErrorState } from "@/components/admin/ui/ErrorState";
+import { LoadingState } from "@/components/admin/ui/LoadingState";
 import { MetricCard } from "@/components/admin/ui/MetricCard";
 import { Modal } from "@/components/admin/ui/Modal";
 import {
@@ -96,26 +99,27 @@ export function FileReviewView() {
   const [deleteTarget, setDeleteTarget] = useState<AdminFileAsset | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    listAdminFiles()
-      .then((result) => {
-        if (!active) return;
-        setFiles(result.files);
-        setSource(result.source);
-        setError("");
-      })
-      .catch((requestError: unknown) => {
-        if (!active) return;
-        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar arquivos.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+  const loadFiles = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await listAdminFiles();
+      setFiles(result.files);
+      setSource(result.source);
+    } catch (requestError) {
+      setFiles([]);
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar arquivos.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadFiles();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadFiles]);
 
   const clients = useMemo(() => Array.from(new Set(files.map(clientLabel))).sort(), [files]);
   const projects = useMemo(() => Array.from(new Set(files.map(projectLabel))).sort(), [files]);
@@ -227,7 +231,7 @@ export function FileReviewView() {
 
       {source === "mock" ? (
         <div className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm font-semibold text-yellow-700">
-          API real indisponivel ou sem sessao admin. Exibindo fallback mockado explicitamente.
+          Usando fallback de desenvolvimento porque a API nao respondeu.
         </div>
       ) : null}
       {notice ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-[#00B074]">{notice}</div> : null}
@@ -254,9 +258,10 @@ export function FileReviewView() {
       </div>
 
       <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-        {loading ? <p className="text-sm text-gray-500">Carregando arquivos...</p> : null}
-        {!loading && filteredFiles.length === 0 ? <p className="text-sm text-gray-500">Nenhum arquivo encontrado para os filtros atuais.</p> : null}
-        {filteredFiles.length ? (
+        {loading ? <LoadingState title="Carregando arquivos" /> : null}
+        {!loading && error && !files.length ? <ErrorState description={error} onRetry={loadFiles} /> : null}
+        {!loading && !error && filteredFiles.length === 0 ? <EmptyState title="Nenhum arquivo encontrado." description="Arquivos enviados para revisao aparecerao aqui." /> : null}
+        {!loading && filteredFiles.length ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1180px] text-left">
               <thead className="bg-[#F4F7F6] text-xs uppercase tracking-wider text-gray-500">

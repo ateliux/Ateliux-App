@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { blogContent } from "../../content/blog";
+import { blogContent, type BlogPost } from "../../content/blog";
 import { blogPostRoute } from "../../data/siteRoutes";
 import { BlogArtwork } from "./BlogArtwork";
 import { MotionCard } from "../motion";
 
-export function FeaturedPost() {
-  const post = blogContent.featuredPost;
+export function FeaturedPost({ post = blogContent.featuredPost }: { post?: BlogPost }) {
 
   return (
     <section className="mx-auto mb-16 w-full max-w-6xl px-6">

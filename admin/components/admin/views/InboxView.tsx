@@ -1,12 +1,16 @@
 "use client";
 
 import { Archive, CheckCircle2, Download, FileText, MoreVertical, Paperclip, Plus, Search, Send, SlidersHorizontal, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ADMIN_INBOX_CONVERSATIONS, PORTAL_CLIENTS, PORTAL_PROJECTS_SCOPED } from "@/data/admin/admin-mock-data";
+import { canUseDevFallback } from "@/lib/env/is-dev-fallback-enabled";
 import type { AdminInboxAttachment, AdminInboxChannel, AdminInboxConversation, AdminInboxPriority, AdminInboxStatus } from "@/types/admin";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { Avatar } from "@/components/admin/ui/Avatar";
 import { Badge } from "@/components/admin/ui/Badge";
+import { EmptyState } from "@/components/admin/ui/EmptyState";
+import { ErrorState } from "@/components/admin/ui/ErrorState";
+import { LoadingState } from "@/components/admin/ui/LoadingState";
 import { Modal } from "@/components/admin/ui/Modal";
 import {
   deleteAdminInboxConversation,
@@ -85,11 +89,13 @@ function AttachmentCard({ attachment }: { attachment: AdminInboxAttachment }) {
 }
 
 export function InboxView() {
-  const [conversations, setConversations] = useState<AdminInboxConversation[]>([...ADMIN_INBOX_CONVERSATIONS]);
-  const [source, setSource] = useState<"api" | "mock">("mock");
+  const [conversations, setConversations] = useState<AdminInboxConversation[]>([]);
+  const [source, setSource] = useState<"api" | "mock">("api");
+  const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
   const [activeChannel, setActiveChannel] = useState<AdminInboxChannel>("clientes");
-  const [activeConversationId, setActiveConversationId] = useState(ADMIN_INBOX_CONVERSATIONS.find((conversation) => conversation.channel === "clientes")?.id ?? "");
+  const [activeConversationId, setActiveConversationId] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<AdminInboxStatus | "todos">("todos");
   const [showFilters, setShowFilters] = useState(false);
@@ -98,26 +104,38 @@ export function InboxView() {
   const [pendingAttachment, setPendingAttachment] = useState<AdminInboxAttachment | null>(null);
   const [conversationToDelete, setConversationToDelete] = useState<AdminInboxConversation | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    listAdminInboxConversations()
-      .then((items) => {
-        if (!active) return;
-        setConversations(items);
-        setSource("api");
-        const first = items.find((conversation) => conversation.channel === activeChannel) ?? items[0];
-        setActiveConversationId(first?.id ?? "");
-      })
-      .catch(() => {
-        if (!active) return;
+  const loadConversations = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const items = await listAdminInboxConversations();
+      setConversations(items);
+      setSource("api");
+      const first = items.find((conversation) => conversation.channel === activeChannel) ?? items[0];
+      setActiveConversationId(first?.id ?? "");
+    } catch (requestError) {
+      if (canUseDevFallback("admin/inbox")) {
         setConversations([...ADMIN_INBOX_CONVERSATIONS]);
         setSource("mock");
-      });
-
-    return () => {
-      active = false;
-    };
+        const first = ADMIN_INBOX_CONVERSATIONS.find((conversation) => conversation.channel === activeChannel) ?? ADMIN_INBOX_CONVERSATIONS[0];
+        setActiveConversationId(first?.id ?? "");
+      } else {
+        setConversations([]);
+        setSource("api");
+        setActiveConversationId("");
+        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar a caixa de entrada.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [activeChannel]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadConversations();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadConversations]);
 
   const channelCounts = useMemo(() => {
     return {
@@ -162,6 +180,11 @@ export function InboxView() {
   }
 
   function createConversation() {
+    if (source !== "mock") {
+      setNotice("Criacao manual de conversa local bloqueada. Use um chamado, lead ou solicitacao real para abrir conversa.");
+      return;
+    }
+
     const isClientChannel = activeChannel === "clientes";
     const fallbackClient = PORTAL_CLIENTS[0];
     const fallbackProject = PORTAL_PROJECTS_SCOPED.find((project) => project.clientId === fallbackClient.id);
@@ -199,6 +222,11 @@ export function InboxView() {
   }
 
   function attachMockFile() {
+    if (source !== "mock") {
+      setNotice("Anexo local bloqueado. Envie o arquivo pelo fluxo real de uploads antes de responder.");
+      return;
+    }
+
     setPendingAttachment({
       id: `reply-attachment-${Date.now()}`,
       name: "anexo-ateliux.pdf",
@@ -276,12 +304,14 @@ export function InboxView() {
 
       {source === "mock" ? (
         <div className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm font-semibold text-yellow-700">
-          API real indisponivel ou sem sessao admin. Exibindo fallback mockado da caixa de entrada.
+          Usando fallback de desenvolvimento porque a API nao respondeu.
         </div>
       ) : null}
       {notice ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{notice}</div> : null}
+      {loading ? <LoadingState title="Carregando caixa de entrada" /> : null}
+      {!loading && error ? <ErrorState description={error} onRetry={loadConversations} /> : null}
 
-      <div className="flex h-[calc(100vh-230px)] min-h-[680px] flex-col gap-6 lg:flex-row">
+      {!loading && !error ? <div className="flex h-[calc(100vh-230px)] min-h-[680px] flex-col gap-6 lg:flex-row">
         <div className="flex w-full flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm lg:w-[420px]">
           <div className="border-b border-gray-100 p-4">
             <div className="mb-4 grid grid-cols-2 rounded-2xl bg-gray-50 p-1">
@@ -352,10 +382,7 @@ export function InboxView() {
                 </button>
               ))
             ) : (
-              <div className="flex h-full min-h-64 flex-col items-center justify-center p-6 text-center text-gray-400">
-                <Search className="mb-3 h-8 w-8 opacity-40" />
-                <p className="text-sm font-semibold">Nenhuma conversa encontrada.</p>
-              </div>
+              <div className="p-4"><EmptyState title="Nenhuma conversa encontrada." description="Conversas reais aparecerao aqui quando clientes enviarem mensagens." /></div>
             )}
           </div>
         </div>
@@ -472,9 +499,9 @@ export function InboxView() {
             </div>
           )}
         </div>
-      </div>
+      </div> : null}
 
-      <Modal isOpen={Boolean(conversationToDelete)} onClose={() => setConversationToDelete(null)} title="Excluir conversa" description="Esta acao remove a conversa apenas do estado local da demonstracao.">
+      <Modal isOpen={Boolean(conversationToDelete)} onClose={() => setConversationToDelete(null)} title="Excluir conversa" description={source === "api" ? "Esta acao arquiva a conversa no backend." : "Esta acao remove a conversa apenas do fallback de desenvolvimento."}>
         {conversationToDelete ? (
           <div className="space-y-5">
             <p className="text-sm text-gray-600">Confirma a exclusao da conversa <strong>{conversationToDelete.subject}</strong>?</p>

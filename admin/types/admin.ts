@@ -303,6 +303,7 @@ export type BlogPostStatus = "Publicado" | "Rascunho" | "Agendado" | "Arquivado"
 
 export type AdminBlogPost = {
   id: number;
+  apiId?: string;
   title: string;
   slug: string;
   tag: string;
@@ -345,6 +346,7 @@ export type NewsletterSubscriberStatus = "Ativo" | "Novo" | "Descadastrado";
 
 export type NewsletterSubscriber = {
   id: number;
+  apiId?: string;
   email: string;
   name: string;
   origin: string;

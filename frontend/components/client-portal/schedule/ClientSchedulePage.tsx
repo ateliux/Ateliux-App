@@ -1,9 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { clientScheduleEvents } from "@/data/client-portal/client-portal-mock-data";
+import { canUseDevFallback } from "@/lib/env/is-dev-fallback-enabled";
+import { toClientScheduleEvent } from "@/lib/client-portal/api-adapters";
+import { listClientSchedule } from "@/services/client-schedule.service";
 import type { ClientScheduleEvent } from "@/types/client-portal";
+import { EmptyState } from "@/components/states/EmptyState";
+import { ErrorState } from "@/components/states/ErrorState";
+import { LoadingState } from "@/components/states/LoadingState";
 import { ClientPortalBadge } from "@/components/client-portal/ui/ClientPortalBadge";
 import { ClientPortalCard } from "@/components/client-portal/ui/ClientPortalCard";
 import { ClientPortalModal } from "@/components/client-portal/ui/ClientPortalModal";
@@ -18,7 +24,33 @@ export function ClientSchedulePage() {
   const today = useMemo(() => new Date(), []);
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState<ClientScheduleEvent | null>(null);
+  const [events, setEvents] = useState<ClientScheduleEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const loadEvents = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await listClientSchedule<Record<string, unknown>>();
+      setEvents(response.map(toClientScheduleEvent).filter((event) => event.date));
+    } catch (loadError) {
+      if (canUseDevFallback("frontend/client-schedule")) {
+        setEvents(clientScheduleEvents);
+      } else {
+        setEvents([]);
+        setError(loadError instanceof Error ? loadError.message : "Nao foi possivel carregar o cronograma.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadEvents();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadEvents]);
   const days = useMemo(() => { const first = new Date(month.getFullYear(), month.getMonth(), 1); const start = new Date(first); start.setDate(first.getDate() - first.getDay()); return Array.from({ length: 42 }, (_, index) => { const date = new Date(start); date.setDate(start.getDate() + index); return date; }); }, [month]);
   const title = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(month);
-  return <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8"><ClientPortalPageHeader eyebrow="Datas do projeto" title="Cronograma" description="Acompanhe reunioes, entregas, aprovacoes e a previsao de publicacao." /><ClientPortalCard className="overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 p-5"><div className="flex gap-2"><button type="button" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))} aria-label="Mes anterior" className="rounded-lg border border-slate-200 p-2"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))} aria-label="Proximo mes" className="rounded-lg border border-slate-200 p-2"><ChevronRight className="h-4 w-4" /></button></div><p className="font-bold capitalize text-slate-900">{title}</p><button type="button" onClick={() => setMonth(new Date(today.getFullYear(), today.getMonth(), 1))} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold">Hoje</button></div><div className="overflow-x-auto p-4 sm:p-6"><div className="min-w-[760px]"><div className="mb-3 grid grid-cols-7 gap-3 text-center">{weekDays.map((day) => <div key={day} className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{day}</div>)}</div><div className="grid grid-cols-7 gap-3">{days.map((date) => { const dateIso = isoDate(date); const currentMonth = date.getMonth() === month.getMonth(); const dayEvents = clientScheduleEvents.filter((event) => event.date === dateIso); const isToday = dateIso === isoDate(today); return <div key={dateIso} className={`min-h-28 rounded-xl border p-2.5 ${currentMonth ? "border-slate-100 bg-white" : "border-transparent bg-slate-50/70"}`}><span className={`grid h-6 w-6 place-items-center rounded-full text-xs ${isToday ? "bg-black text-white" : currentMonth ? "text-slate-700" : "text-slate-300"}`}>{date.getDate()}</span><div className="mt-2 space-y-1.5">{dayEvents.map((event) => <button key={event.id} type="button" onClick={() => setSelected(event)} className="block w-full truncate rounded-md bg-slate-100 px-2 py-1.5 text-left text-[10px] font-medium"><span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${typeClass[event.type]}`} />{event.time} {event.title}</button>)}</div></div>; })}</div></div></div></ClientPortalCard>{selected ? <ClientPortalModal title={selected.title} description={`${new Intl.DateTimeFormat("pt-BR").format(new Date(`${selected.date}T12:00:00`))} as ${selected.time}`} onClose={() => setSelected(null)}><ClientPortalBadge>{typeLabel[selected.type]}</ClientPortalBadge><p className="mt-4 text-sm leading-6 text-slate-600">{selected.description}</p><p className="mt-4 text-xs text-slate-400">Responsavel: {selected.responsible}</p></ClientPortalModal> : null}</div>;
+  return <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8"><ClientPortalPageHeader eyebrow="Datas do projeto" title="Cronograma" description="Acompanhe reunioes, entregas, aprovacoes e a previsao de publicacao." />{loading ? <LoadingState title="Carregando cronograma" /> : error ? <ErrorState title="Nao foi possivel carregar o cronograma" description={error} onRetry={loadEvents} /> : events.length === 0 ? <EmptyState title="Nenhum evento publicado" description="Quando a equipe publicar datas visiveis para voce, elas aparecerao aqui." /> : <ClientPortalCard className="overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 p-5"><div className="flex gap-2"><button type="button" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))} aria-label="Mes anterior" className="rounded-lg border border-slate-200 p-2"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))} aria-label="Proximo mes" className="rounded-lg border border-slate-200 p-2"><ChevronRight className="h-4 w-4" /></button></div><p className="font-bold capitalize text-slate-900">{title}</p><button type="button" onClick={() => setMonth(new Date(today.getFullYear(), today.getMonth(), 1))} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold">Hoje</button></div><div className="overflow-x-auto p-4 sm:p-6"><div className="min-w-[760px]"><div className="mb-3 grid grid-cols-7 gap-3 text-center">{weekDays.map((day) => <div key={day} className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{day}</div>)}</div><div className="grid grid-cols-7 gap-3">{days.map((date) => { const dateIso = isoDate(date); const currentMonth = date.getMonth() === month.getMonth(); const dayEvents = events.filter((event) => event.date === dateIso); const isToday = dateIso === isoDate(today); return <div key={dateIso} className={`min-h-28 rounded-xl border p-2.5 ${currentMonth ? "border-slate-100 bg-white" : "border-transparent bg-slate-50/70"}`}><span className={`grid h-6 w-6 place-items-center rounded-full text-xs ${isToday ? "bg-black text-white" : currentMonth ? "text-slate-700" : "text-slate-300"}`}>{date.getDate()}</span><div className="mt-2 space-y-1.5">{dayEvents.map((event) => <button key={event.id} type="button" onClick={() => setSelected(event)} className="block w-full truncate rounded-md bg-slate-100 px-2 py-1.5 text-left text-[10px] font-medium"><span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${typeClass[event.type]}`} />{event.time} {event.title}</button>)}</div></div>; })}</div></div></div></ClientPortalCard>}{selected ? <ClientPortalModal title={selected.title} description={`${new Intl.DateTimeFormat("pt-BR").format(new Date(`${selected.date}T12:00:00`))} as ${selected.time}`} onClose={() => setSelected(null)}><ClientPortalBadge>{typeLabel[selected.type]}</ClientPortalBadge><p className="mt-4 text-sm leading-6 text-slate-600">{selected.description}</p><p className="mt-4 text-xs text-slate-400">Responsavel: {selected.responsible}</p></ClientPortalModal> : null}</div>;
 }

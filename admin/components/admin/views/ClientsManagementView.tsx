@@ -2,11 +2,15 @@
 
 import Link from "next/link";
 import { Edit3, ExternalLink, Grid2X2, List, MoreVertical, Plus, Search, Trash2, UserX } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ADMIN_CLIENTS } from "@/data/admin/admin-mock-data";
+import { canUseDevFallback } from "@/lib/env/is-dev-fallback-enabled";
 import type { AdminClient, ClientAccountStatus, ClientStatus } from "@/types/admin";
 import { Badge } from "@/components/admin/ui/Badge";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
+import { EmptyState } from "@/components/admin/ui/EmptyState";
+import { ErrorState } from "@/components/admin/ui/ErrorState";
+import { LoadingState } from "@/components/admin/ui/LoadingState";
 import { Modal } from "@/components/admin/ui/Modal";
 import {
   createAdminClient,
@@ -128,36 +132,45 @@ function ClientCard({
 }
 
 export function ClientsManagementView() {
-  const [clients, setClients] = useState<AdminClient[]>([...ADMIN_CLIENTS]);
-  const [source, setSource] = useState<"api" | "mock">("mock");
+  const [clients, setClients] = useState<AdminClient[]>([]);
+  const [source, setSource] = useState<"api" | "mock">("api");
   const [mode, setMode] = useState<"kanban" | "lista">("kanban");
   const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<AdminClient>(emptyDraft);
   const [selectedClient, setSelectedClient] = useState<AdminClient | null>(null);
   const [modal, setModal] = useState<"details" | "editor" | "link" | "delete" | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    listAdminClients()
-      .then((items) => {
-        if (!active) return;
-        setClients(items);
-        setSource("api");
-        setError("");
-      })
-      .catch((requestError: unknown) => {
-        if (!active) return;
+  const loadClients = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const items = await listAdminClients();
+      setClients(items);
+      setSource("api");
+    } catch (requestError) {
+      if (canUseDevFallback("admin/clients")) {
         setClients([...ADMIN_CLIENTS]);
         setSource("mock");
+        setError("");
+      } else {
+        setClients([]);
+        setSource("api");
         setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar clientes reais.");
-      });
-
-    return () => {
-      active = false;
-    };
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadClients();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadClients]);
 
   const filteredClients = useMemo(() => {
     return clients.filter((client) => `${client.name} ${client.company} ${client.project} ${client.email}`.toLowerCase().includes(query.toLowerCase()));
@@ -279,7 +292,11 @@ export function ClientsManagementView() {
       {notice ? <div className="rounded-2xl border border-[#A7F3D0] bg-[#E6F7F1] px-4 py-3 text-sm font-semibold text-[#00B074]">{notice}</div> : null}
       {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</div> : null}
 
-      {mode === "kanban" ? (
+      {loading ? <LoadingState title="Carregando clientes" /> : null}
+      {!loading && error && !clients.length ? <ErrorState description={error} onRetry={loadClients} /> : null}
+      {!loading && !error && !filteredClients.length ? <EmptyState title="Nenhum cliente encontrado." description="Crie ou ajuste a busca para visualizar clientes." /> : null}
+
+      {!loading && (!error || clients.length) && filteredClients.length && mode === "kanban" ? (
         <div className="overflow-x-auto pb-3">
           <div className="grid min-w-[1200px] grid-cols-6 gap-4">
             {columns.map((column) => {
@@ -300,7 +317,9 @@ export function ClientsManagementView() {
             })}
           </div>
         </div>
-      ) : (
+      ) : null}
+
+      {!loading && (!error || clients.length) && filteredClients.length && mode === "lista" ? (
         <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1050px] text-left">
@@ -350,7 +369,7 @@ export function ClientsManagementView() {
             </table>
           </div>
         </div>
-      )}
+      ) : null}
 
       <Modal isOpen={modal === "details" && Boolean(selectedClient)} onClose={() => setModal(null)} title="Detalhes do cliente" description="Resumo da conta e do projeto vinculado ao Portal do Cliente." size="lg">
         {selectedClient ? (
