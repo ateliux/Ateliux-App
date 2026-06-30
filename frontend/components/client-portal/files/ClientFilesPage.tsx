@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { Download, Eye, FilePlus2, Upload } from "lucide-react";
+import { siteRoutes } from "@/data/siteRoutes";
 import type { ClientFile } from "@/types/client-portal";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
@@ -41,6 +43,18 @@ const statusVariant: Record<ClientFile["status"], "neutral" | "success" | "warni
   rejected: "danger",
   deleted: "neutral",
 };
+
+function fileModeLabel(file: ClientFile) {
+  if (file.riskLevel === "HIGH_RISK_DOWNLOAD_ONLY") return "Download protegido";
+  if (file.downloadMode === "ATTACHMENT_ONLY") return "Download";
+  return "Visualizacao segura";
+}
+
+function fileModeVariant(file: ClientFile): "neutral" | "success" | "warning" | "danger" | "info" {
+  if (file.riskLevel === "HIGH_RISK_DOWNLOAD_ONLY") return "warning";
+  if (file.downloadMode === "ATTACHMENT_ONLY") return "info";
+  return "success";
+}
 
 export function ClientFilesPage() {
   const [files, setFiles] = useState<ClientFile[]>([]);
@@ -129,6 +143,13 @@ export function ClientFilesPage() {
       return;
     }
 
+    if (
+      file.riskLevel === "HIGH_RISK_DOWNLOAD_ONLY" &&
+      !window.confirm("Este arquivo foi enviado pela equipe Ateliux e sera baixado como anexo. Abra apenas se reconhecer o conteudo.")
+    ) {
+      return;
+    }
+
     try {
       const { url } = await getClientFileSignedUrl(file.fileAssetId);
       window.open(url, "_blank", "noopener,noreferrer");
@@ -150,7 +171,7 @@ export function ClientFilesPage() {
       />
 
       <p className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-        Arquivos enviados podem passar por revisao da equipe Ateliux antes de ficarem disponiveis.
+        Arquivos enviados podem passar por revisao da equipe Ateliux antes de ficarem disponiveis. Evite enviar dados sensiveis desnecessarios.
       </p>
 
       {source === "mock" ? (
@@ -184,6 +205,7 @@ export function ClientFilesPage() {
               <th className="p-4">Origem</th>
               <th className="p-4">Data</th>
               <th className="p-4">Tamanho</th>
+              <th className="p-4">Modo</th>
               <th className="p-4">Status</th>
               <th className="p-4">Acoes</th>
             </tr>
@@ -203,6 +225,7 @@ export function ClientFilesPage() {
                 <td className="p-4"><ClientPortalBadge variant={file.origin === "Ateliux" ? "info" : "neutral"}>{file.origin}</ClientPortalBadge></td>
                 <td className="p-4 text-sm text-slate-500">{file.date}</td>
                 <td className="p-4 text-sm text-slate-500">{file.size}</td>
+                <td className="p-4"><ClientPortalBadge variant={fileModeVariant(file)}>{fileModeLabel(file)}</ClientPortalBadge></td>
                 <td className="p-4"><ClientPortalBadge variant={statusVariant[file.status]}>{statusLabel[file.status]}</ClientPortalBadge></td>
                 <td className="p-4">
                   <div className="flex gap-2">
@@ -224,6 +247,13 @@ export function ClientFilesPage() {
               <input type="file" required onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" />
             </label>
             {selectedFile ? <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">{selectedFile.name} - {Math.max(1, Math.round(selectedFile.size / 1024))} KB</p> : null}
+            <p className="rounded-xl border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-500">
+              Ao enviar arquivo, voce autoriza o armazenamento seguro e a revisao pela equipe Ateliux para execucao do projeto. Veja a{" "}
+              <Link href={siteRoutes.privacy} className="font-semibold text-slate-800 underline">
+                Politica de Privacidade
+              </Link>
+              .
+            </p>
             <label className="block text-sm font-medium text-slate-700">
               Projeto opcional
               <select name="projectId" defaultValue="" className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -245,7 +275,7 @@ export function ClientFilesPage() {
             <div>
               <Eye className="mx-auto h-10 w-10 text-slate-300" />
               <p className="mt-4 text-sm font-semibold text-slate-700">{statusLabel[viewing.status]}</p>
-              <p className="mt-1 text-xs text-slate-400">{viewing.rejectionReason ?? "Acesso ao arquivo real usa signed URL quando aprovado."}</p>
+              <p className="mt-1 text-xs text-slate-400">{fileModeLabel(viewing)} - {viewing.rejectionReason ?? "Acesso ao arquivo real usa signed URL quando aprovado."}</p>
             </div>
           </div>
         </ClientPortalModal>

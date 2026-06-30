@@ -139,6 +139,7 @@ function uploadSchema(includeClientId: boolean) {
         enum: [
           'avatar',
           'blog_cover',
+          'blog_hero',
           'contact_attachment',
           'support_attachment',
           'client_file',

@@ -33,7 +33,14 @@ import {
   rejectAdminFile,
   type AdminFileAsset,
 } from "@/services/admin-files.service";
-import { createAdminProject, deleteAdminProject, listAdminClientProjects, updateAdminProject } from "@/services/admin-projects.service";
+import {
+  createAdminProjectFullSetup,
+  deleteAdminProject,
+  listAdminClientProjects,
+  listAdminUsers,
+  updateAdminProject,
+  type AdminUserOption,
+} from "@/services/admin-projects.service";
 import {
   convertAdminRequestToStage,
   createAdminClientRequest,
@@ -57,6 +64,7 @@ type ApiRecord = Record<string, unknown>;
 
 type PortalData = {
   clients: AdminClient[];
+  adminUsers: AdminUserOption[];
   projects: ApiRecord[];
   briefings: ApiRecord[];
   stages: ApiRecord[];
@@ -76,10 +84,33 @@ type DraftState = {
   url: string;
   amount: string;
   date: string;
+  projectType: string;
+  status: string;
+  priority: string;
+  managerId: string;
+  teamIds: string[];
+  startDate: string;
+  deadline: string;
+  currentStage: string;
+  progress: string;
+  visibleToClient: boolean;
+  clientFacingSummary: string;
+  internalNotes: string;
+  stageTitle: string;
+  stageDescription: string;
+  briefingTitle: string;
+  briefingDescription: string;
+  scheduleTitle: string;
+  scheduleDate: string;
+  scheduleTime: string;
+  financeDescription: string;
+  financeAmount: string;
+  financeDueDate: string;
 };
 
 const emptyData: PortalData = {
   clients: [],
+  adminUsers: [],
   projects: [],
   briefings: [],
   stages: [],
@@ -99,6 +130,28 @@ const emptyDraft: DraftState = {
   url: "",
   amount: "",
   date: "",
+  projectType: "Projeto digital",
+  status: "ACTIVE",
+  priority: "MEDIUM",
+  managerId: "",
+  teamIds: [],
+  startDate: "",
+  deadline: "",
+  currentStage: "Planejamento inicial",
+  progress: "0",
+  visibleToClient: true,
+  clientFacingSummary: "",
+  internalNotes: "",
+  stageTitle: "Planejamento inicial",
+  stageDescription: "",
+  briefingTitle: "Briefing inicial",
+  briefingDescription: "",
+  scheduleTitle: "",
+  scheduleDate: "",
+  scheduleTime: "10:00",
+  financeDescription: "",
+  financeAmount: "",
+  financeDueDate: "",
 };
 
 const tabs: readonly { id: Exclude<PortalSection, "workspace">; label: string; href: string }[] = [
@@ -238,6 +291,48 @@ function projectClientId(project: ApiRecord) {
   return asString(project.clientId, asString(client?.id));
 }
 
+function projectManagerId(project: ApiRecord) {
+  const manager = typeof project.manager === "object" && project.manager ? project.manager as ApiRecord : null;
+  return asString(project.managerId, asString(manager?.id));
+}
+
+function projectTeamIds(project: ApiRecord) {
+  const members = Array.isArray(project.teamMembers) ? project.teamMembers : [];
+  return members
+    .map((member) => {
+      const record = typeof member === "object" && member ? member as ApiRecord : {};
+      const adminUser = typeof record.adminUser === "object" && record.adminUser ? record.adminUser as ApiRecord : {};
+      return asString(record.adminUserId, asString(adminUser.id));
+    })
+    .filter(Boolean);
+}
+
+function dateInputValue(value: unknown) {
+  const raw = typeof value === "string" || value instanceof Date ? value : "";
+  const date = raw ? new Date(raw) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString().slice(0, 10) : "";
+}
+
+function projectToDraft(project: ApiRecord): DraftState {
+  return {
+    ...emptyDraft,
+    title: asString(project.name),
+    description: asString(project.scope, asString(project.description)),
+    projectType: asString(project.type, "Projeto digital"),
+    status: asString(project.status, "ACTIVE"),
+    priority: asString(project.priority, "MEDIUM"),
+    managerId: projectManagerId(project),
+    teamIds: projectTeamIds(project),
+    startDate: dateInputValue(project.startDate),
+    deadline: dateInputValue(project.deadline),
+    currentStage: asString(project.currentStage, "Planejamento inicial"),
+    progress: String(asNumber(project.progress, 0)),
+    visibleToClient: project.visibleToClient !== false,
+    clientFacingSummary: asString(project.clientFacingSummary, asString(project.description, asString(project.scope))),
+    internalNotes: asString(project.internalNotes),
+  };
+}
+
 function itemTitle(section: PortalSection, item: ApiRecord | AdminFileAsset | AdminClientRequestDto) {
   if (section === "files") return asString((item as AdminFileAsset).originalName ?? (item as ApiRecord).name, "Arquivo");
   if (section === "billing") return asString((item as ApiRecord).description, "Cobranca");
@@ -251,7 +346,12 @@ function itemTitle(section: PortalSection, item: ApiRecord | AdminFileAsset | Ad
 function itemDescription(section: PortalSection, item: ApiRecord | AdminFileAsset | AdminClientRequestDto) {
   if (section === "files") {
     const file = item as AdminFileAsset;
-    return `${asString(file.mimeType, "Arquivo")} - ${Math.round(asNumber(file.size) / 1024)} KB`;
+    const mode = file.riskLevel === "HIGH_RISK_DOWNLOAD_ONLY"
+      ? "Download protegido"
+      : file.downloadMode === "ATTACHMENT_ONLY"
+        ? "Download"
+        : "Visualizacao segura";
+    return `${asString(file.mimeType, "Arquivo")} - ${Math.round(asNumber(file.size) / 1024)} KB - ${mode}`;
   }
   if (section === "billing") return `Valor: R$ ${asNumber((item as ApiRecord).amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
   if (section === "history") {
@@ -348,9 +448,275 @@ function ProjectSelect({
   );
 }
 
+function adminUserLabel(user: AdminUserOption) {
+  return `${user.user.name} - ${user.role.replaceAll("_", " ")}`;
+}
+
+function toggleTeamId(teamIds: string[], id: string) {
+  return teamIds.includes(id) ? teamIds.filter((item) => item !== id) : [...teamIds, id];
+}
+
+function ProjectSetupPanel({
+  clients,
+  adminUsers,
+  selectedClientId,
+  draft,
+  saving,
+  lockedClient,
+  onClientChange,
+  onDraftChange,
+  onSubmit,
+}: {
+  clients: AdminClient[];
+  adminUsers: AdminUserOption[];
+  selectedClientId: string;
+  draft: DraftState;
+  saving: boolean;
+  lockedClient: boolean;
+  onClientChange: (clientId: string) => void;
+  onDraftChange: (draft: DraftState) => void;
+  onSubmit: () => void;
+}) {
+  const selectedClient = clients.find((client) => String(client.id) === selectedClientId);
+  const managerOptions = adminUsers.filter((user) => ["ADMIN", "PROJECT_MANAGER", "DESIGNER_DEV"].includes(user.role));
+  const teamOptions = adminUsers.filter((user) => user.id !== draft.managerId);
+
+  return (
+    <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="mb-6 flex flex-col gap-2">
+        <h3 className="font-bold text-gray-900">Novo projeto completo</h3>
+        <p className="text-sm text-gray-500">Cria projeto, responsavel, etapa inicial, briefing, cronograma, financeiro opcional, historico e notificacao em um unico fluxo.</p>
+      </div>
+
+      <div className="grid gap-5">
+        <section className="rounded-2xl border border-gray-100 p-5">
+          <h4 className="font-bold text-gray-900">1. Cliente e contrato</h4>
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            <ClientFilter clients={clients} selectedClientId={selectedClientId} locked={lockedClient} onChange={onClientChange} />
+            <div className="rounded-2xl bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Empresa</p>
+              <p className="mt-2 text-sm font-bold text-gray-900">{selectedClient?.company ?? "Selecione um cliente"}</p>
+            </div>
+            <div className="rounded-2xl bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Plano</p>
+              <p className="mt-2 text-sm font-bold text-gray-900">{selectedClient?.plan ?? "Nao informado"}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-100 p-5">
+          <h4 className="font-bold text-gray-900">2. Dados principais do projeto</h4>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Nome do projeto<input value={draft.title} onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Tipo<input value={draft.projectType} onChange={(event) => onDraftChange({ ...draft, projectType: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Status inicial<select value={draft.status} onChange={(event) => onDraftChange({ ...draft, status: event.target.value })} className={inputClassName}><option value="ACTIVE">Ativo</option><option value="WAITING_CLIENT">Aguardando cliente</option><option value="DRAFT">Rascunho interno</option><option value="IN_REVIEW">Em revisao</option></select></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Prioridade<select value={draft.priority} onChange={(event) => onDraftChange({ ...draft, priority: event.target.value })} className={inputClassName}><option value="LOW">Baixa</option><option value="MEDIUM">Media</option><option value="HIGH">Alta</option><option value="URGENT">Urgente</option></select></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Inicio<input type="date" value={draft.startDate} onChange={(event) => onDraftChange({ ...draft, startDate: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Prazo final<input type="date" value={draft.deadline} onChange={(event) => onDraftChange({ ...draft, deadline: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700 lg:col-span-2">Escopo<textarea value={draft.description} onChange={(event) => onDraftChange({ ...draft, description: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-100 p-5">
+          <h4 className="font-bold text-gray-900">3. Responsaveis e equipe</h4>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Responsavel principal<select value={draft.managerId} onChange={(event) => onDraftChange({ ...draft, managerId: event.target.value, teamIds: draft.teamIds.filter((id) => id !== event.target.value) })} className={inputClassName}><option value="">Selecione um responsavel</option>{managerOptions.map((user) => <option key={user.id} value={user.id}>{adminUserLabel(user)}</option>)}</select></label>
+            <div className="rounded-2xl bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Equipe interna</p>
+              <div className="mt-3 grid gap-2">
+                {teamOptions.slice(0, 8).map((user) => (
+                  <label key={user.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600">
+                    <input type="checkbox" checked={draft.teamIds.includes(user.id)} onChange={() => onDraftChange({ ...draft, teamIds: toggleTeamId(draft.teamIds, user.id) })} />
+                    {adminUserLabel(user)}
+                  </label>
+                ))}
+                {!teamOptions.length ? <p className="text-xs text-gray-500">Nenhum membro disponivel.</p> : null}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-100 p-5">
+          <h4 className="font-bold text-gray-900">4. Portal do Cliente</h4>
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            <label className="flex items-center gap-3 rounded-2xl bg-gray-50 p-4 text-sm font-semibold text-gray-700"><input type="checkbox" checked={draft.visibleToClient} onChange={(event) => onDraftChange({ ...draft, visibleToClient: event.target.checked })} /> Visivel no Portal</label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Etapa atual<input value={draft.currentStage} onChange={(event) => onDraftChange({ ...draft, currentStage: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Progresso inicial<input type="number" min={0} max={100} value={draft.progress} onChange={(event) => onDraftChange({ ...draft, progress: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700 lg:col-span-3">Resumo visivel ao cliente<textarea value={draft.clientFacingSummary} onChange={(event) => onDraftChange({ ...draft, clientFacingSummary: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-gray-100 p-5">
+            <h4 className="font-bold text-gray-900">5. Etapa inicial</h4>
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Titulo<input value={draft.stageTitle} onChange={(event) => onDraftChange({ ...draft, stageTitle: event.target.value })} className={inputClassName} /></label>
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Descricao<textarea value={draft.stageDescription} onChange={(event) => onDraftChange({ ...draft, stageDescription: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
+          </div>
+          <div className="rounded-2xl border border-gray-100 p-5">
+            <h4 className="font-bold text-gray-900">6. Briefing inicial</h4>
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Titulo<input value={draft.briefingTitle} onChange={(event) => onDraftChange({ ...draft, briefingTitle: event.target.value })} className={inputClassName} /></label>
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Descricao<textarea value={draft.briefingDescription} onChange={(event) => onDraftChange({ ...draft, briefingDescription: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-gray-100 p-5">
+            <h4 className="font-bold text-gray-900">7. Cronograma opcional</h4>
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Marco inicial<input value={draft.scheduleTitle} onChange={(event) => onDraftChange({ ...draft, scheduleTitle: event.target.value })} className={inputClassName} /></label>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold text-gray-700">Data<input type="date" value={draft.scheduleDate} onChange={(event) => onDraftChange({ ...draft, scheduleDate: event.target.value })} className={inputClassName} /></label>
+              <label className="grid gap-2 text-sm font-semibold text-gray-700">Horario<input value={draft.scheduleTime} onChange={(event) => onDraftChange({ ...draft, scheduleTime: event.target.value })} className={inputClassName} /></label>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-gray-100 p-5">
+            <h4 className="font-bold text-gray-900">8. Financeiro opcional</h4>
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Descricao<input value={draft.financeDescription} onChange={(event) => onDraftChange({ ...draft, financeDescription: event.target.value })} className={inputClassName} /></label>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold text-gray-700">Valor<input value={draft.financeAmount} onChange={(event) => onDraftChange({ ...draft, financeAmount: event.target.value })} className={inputClassName} /></label>
+              <label className="grid gap-2 text-sm font-semibold text-gray-700">Vencimento<input type="date" value={draft.financeDueDate} onChange={(event) => onDraftChange({ ...draft, financeDueDate: event.target.value })} className={inputClassName} /></label>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-100 p-5">
+          <h4 className="font-bold text-gray-900">9. Revisao</h4>
+          <p className="mt-2 text-sm text-gray-500">Obrigatorios: cliente, nome, tipo, escopo, responsavel, prazo, etapa atual, status, prioridade e progresso. Briefing, cronograma e financeiro serao criados apenas se preenchidos.</p>
+          <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Observacoes internas<textarea value={draft.internalNotes} onChange={(event) => onDraftChange({ ...draft, internalNotes: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
+        </section>
+      </div>
+
+      <div className="mt-6 flex justify-end">
+        <AdminButton disabled={saving} onClick={onSubmit}>
+          <Plus className="h-4 w-4" />
+          {saving ? "Criando projeto..." : "Criar projeto completo"}
+        </AdminButton>
+      </div>
+    </div>
+  );
+}
+
+function ProjectEditPanel({
+  project,
+  adminUsers,
+  draft,
+  saving,
+  onDraftChange,
+  onCancel,
+  onSubmit,
+}: {
+  project: ApiRecord;
+  adminUsers: AdminUserOption[];
+  draft: DraftState;
+  saving: boolean;
+  onDraftChange: (draft: DraftState) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  const managerOptions = adminUsers.filter((user) => ["ADMIN", "PROJECT_MANAGER", "DESIGNER_DEV"].includes(user.role));
+  const teamOptions = adminUsers.filter((user) => user.id !== draft.managerId);
+
+  return (
+    <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="font-bold text-gray-900">Editar projeto completo</h3>
+          <p className="mt-1 text-sm text-gray-500">Atualize responsavel, equipe, prazo, progresso, etapa, escopo, resumo e visibilidade. As mudancas refletem no Portal do Cliente.</p>
+        </div>
+        <AdminButton variant="secondary" disabled={saving} onClick={onCancel}>Cancelar</AdminButton>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <label className="grid gap-2 text-sm font-semibold text-gray-700">
+          Nome do projeto
+          <input value={draft.title} onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} className={inputClassName} />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700">
+          Tipo
+          <input value={draft.projectType} onChange={(event) => onDraftChange({ ...draft, projectType: event.target.value })} className={inputClassName} />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700">
+          Responsavel principal
+          <select value={draft.managerId} onChange={(event) => onDraftChange({ ...draft, managerId: event.target.value, teamIds: draft.teamIds.filter((id) => id !== event.target.value) })} className={inputClassName}>
+            <option value="">Selecione um responsavel</option>
+            {managerOptions.map((user) => <option key={user.id} value={user.id}>{adminUserLabel(user)}</option>)}
+          </select>
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700">
+          Status
+          <select value={draft.status} onChange={(event) => onDraftChange({ ...draft, status: event.target.value })} className={inputClassName}>
+            <option value="ACTIVE">Ativo</option>
+            <option value="WAITING_CLIENT">Aguardando cliente</option>
+            <option value="DRAFT">Rascunho interno</option>
+            <option value="IN_REVIEW">Em revisao</option>
+            <option value="COMPLETED">Concluido</option>
+            <option value="ARCHIVED">Arquivado</option>
+          </select>
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700">
+          Prioridade
+          <select value={draft.priority} onChange={(event) => onDraftChange({ ...draft, priority: event.target.value })} className={inputClassName}>
+            <option value="LOW">Baixa</option>
+            <option value="MEDIUM">Media</option>
+            <option value="HIGH">Alta</option>
+            <option value="URGENT">Urgente</option>
+          </select>
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700">
+          Prazo final
+          <input type="date" value={draft.deadline} onChange={(event) => onDraftChange({ ...draft, deadline: event.target.value })} className={inputClassName} />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700">
+          Inicio
+          <input type="date" value={draft.startDate} onChange={(event) => onDraftChange({ ...draft, startDate: event.target.value })} className={inputClassName} />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700">
+          Etapa atual
+          <input value={draft.currentStage} onChange={(event) => onDraftChange({ ...draft, currentStage: event.target.value })} className={inputClassName} />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700">
+          Progresso
+          <input type="number" min={0} max={100} value={draft.progress} onChange={(event) => onDraftChange({ ...draft, progress: event.target.value })} className={inputClassName} />
+        </label>
+        <label className="flex items-center gap-3 rounded-2xl bg-gray-50 p-4 text-sm font-semibold text-gray-700">
+          <input type="checkbox" checked={draft.visibleToClient} onChange={(event) => onDraftChange({ ...draft, visibleToClient: event.target.checked })} />
+          Visivel no Portal
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700 lg:col-span-3">
+          Escopo
+          <textarea value={draft.description} onChange={(event) => onDraftChange({ ...draft, description: event.target.value })} rows={3} className={`${inputClassName} resize-none`} />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700 lg:col-span-3">
+          Resumo visivel ao cliente
+          <textarea value={draft.clientFacingSummary} onChange={(event) => onDraftChange({ ...draft, clientFacingSummary: event.target.value })} rows={3} className={`${inputClassName} resize-none`} />
+        </label>
+        <div className="rounded-2xl bg-gray-50 p-4 lg:col-span-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Equipe interna</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {teamOptions.map((user) => (
+              <label key={user.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600">
+                <input type="checkbox" checked={draft.teamIds.includes(user.id)} onChange={() => onDraftChange({ ...draft, teamIds: toggleTeamId(draft.teamIds, user.id) })} />
+                {adminUserLabel(user)}
+              </label>
+            ))}
+          </div>
+        </div>
+        <label className="grid gap-2 text-sm font-semibold text-gray-700 lg:col-span-3">
+          Observacoes internas
+          <textarea value={draft.internalNotes} onChange={(event) => onDraftChange({ ...draft, internalNotes: event.target.value })} rows={3} className={`${inputClassName} resize-none`} />
+        </label>
+      </div>
+
+      <div className="mt-5 flex justify-end">
+        <AdminButton disabled={saving} onClick={onSubmit}>{saving ? "Salvando..." : `Salvar ${itemTitle("projects", project)}`}</AdminButton>
+      </div>
+    </div>
+  );
+}
+
 function CreatePanel({
   section,
   clients,
+  adminUsers,
   projects,
   selectedClientId,
   selectedProjectId,
@@ -364,6 +730,7 @@ function CreatePanel({
 }: {
   section: Exclude<PortalSection, "clients" | "workspace">;
   clients: AdminClient[];
+  adminUsers: AdminUserOption[];
   projects: ApiRecord[];
   selectedClientId: string;
   selectedProjectId: string;
@@ -375,6 +742,22 @@ function CreatePanel({
   onSubmit: () => void;
   lockedClient: boolean;
 }) {
+  if (section === "projects") {
+    return (
+      <ProjectSetupPanel
+        clients={clients}
+        adminUsers={adminUsers}
+        selectedClientId={selectedClientId}
+        draft={draft}
+        saving={saving}
+        lockedClient={lockedClient}
+        onClientChange={onClientChange}
+        onDraftChange={onDraftChange}
+        onSubmit={onSubmit}
+      />
+    );
+  }
+
   const needsUrl = section === "previews";
   const needsAmount = section === "billing";
   const needsDate = section === "schedule" || section === "billing";
@@ -385,6 +768,11 @@ function CreatePanel({
       <div className="mb-5 flex flex-col gap-2">
         <h3 className="font-bold text-gray-900">{sectionMeta[section].actionLabel}</h3>
         <p className="text-sm text-gray-500">Cria o registro direto na API e vincula por cliente/projeto.</p>
+        {section === "files" ? (
+          <p className="rounded-2xl bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-500">
+            A equipe Ateliux pode enviar formatos amplos pelo fluxo seguro de uploads. Arquivos sensiveis serao entregues como download seguro.
+          </p>
+        ) : null}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <ClientFilter clients={clients} selectedClientId={selectedClientId} locked={lockedClient} onChange={onClientChange} />
@@ -485,6 +873,13 @@ function RecordsTable({
                     <div className="flex flex-wrap justify-end gap-2">
                       {section === "projects" ? (
                         <>
+                          <Link
+                            href={`/portal-do-cliente/projetos/${id}`}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                          >
+                            Abrir projeto
+                          </Link>
+                          <AdminButton variant="secondary" disabled={busyKey === `${id}:edit`} onClick={() => onAction("edit-project", item)}>Editar</AdminButton>
                           <AdminButton variant="secondary" disabled={busyKey === `${id}:complete`} onClick={() => onAction("complete-project", item)}>Concluir</AdminButton>
                           <AdminButton variant="secondary" disabled={busyKey === `${id}:archive`} onClick={() => onAction("archive-project", item)}><Archive className="h-4 w-4" /> Arquivar</AdminButton>
                         </>
@@ -587,6 +982,8 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [data, setData] = useState<PortalData>(emptyData);
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
+  const [editingProject, setEditingProject] = useState<ApiRecord | null>(null);
+  const [editDraft, setEditDraft] = useState<DraftState>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [busyKey, setBusyKey] = useState("");
@@ -599,6 +996,7 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
     try {
       const clients = await listAdminClients();
       const [
+        adminUsers,
         projectGroups,
         briefings,
         stages,
@@ -610,6 +1008,7 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
         billing,
         history,
       ] = await Promise.all([
+        listAdminUsers(),
         Promise.all(clients.map((client) => listAdminClientProjects<ApiRecord>(String(client.id)).catch(() => []))),
         adminPortalApi.briefings.list<ApiRecord>(),
         adminPortalApi.stages.list<ApiRecord>(),
@@ -627,6 +1026,7 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
       const firstProject = projects.find((project) => !firstClientId || projectClientId(project) === String(firstClientId)) ?? projects[0];
       setData({
         clients,
+        adminUsers,
         projects,
         briefings,
         stages,
@@ -687,6 +1087,34 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
       setNotice("Selecione um cliente especifico antes de criar registro.");
       return;
     }
+    if (activeSection === "projects" && !draft.managerId) {
+      setNotice("Selecione o responsavel principal antes de criar o projeto.");
+      return;
+    }
+    if (activeSection === "projects" && !draft.title.trim()) {
+      setNotice("Informe o nome do projeto antes de criar.");
+      return;
+    }
+    if (activeSection === "projects" && draft.projectType.trim().length < 2) {
+      setNotice("Informe o tipo do projeto antes de criar.");
+      return;
+    }
+    if (activeSection === "projects" && draft.description.trim().length < 3) {
+      setNotice("Informe o escopo do projeto antes de criar.");
+      return;
+    }
+    if (activeSection === "projects" && !draft.deadline) {
+      setNotice("Informe o prazo final antes de criar o projeto.");
+      return;
+    }
+    if (activeSection === "projects" && draft.currentStage.trim().length < 2) {
+      setNotice("Informe a etapa atual antes de criar o projeto.");
+      return;
+    }
+    if (activeSection === "projects" && (asNumber(draft.progress, -1) < 0 || asNumber(draft.progress, 101) > 100)) {
+      setNotice("Informe um progresso entre 0 e 100.");
+      return;
+    }
 
     const title = draft.title.trim() || sectionMeta[activeSection].actionLabel;
     const description = draft.description.trim() || "Registro criado pela administracao Ateliux.";
@@ -694,14 +1122,64 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
     setNotice("");
     try {
       if (activeSection === "projects") {
-        await createAdminProject({
+        const stageTitle = draft.stageTitle.trim() || draft.currentStage.trim() || "Planejamento inicial";
+        const briefingDescription = draft.briefingDescription.trim();
+        const scheduleTitle = draft.scheduleTitle.trim();
+        const financeDescription = draft.financeDescription.trim();
+        await createAdminProjectFullSetup({
           clientId: selectedClientId,
           name: title,
-          type: "Projeto digital",
+          type: draft.projectType.trim() || "Projeto digital",
           scope: description,
-          status: "ACTIVE",
-          progress: 0,
-          visibleToClient: true,
+          description,
+          status: draft.status,
+          priority: draft.priority,
+          managerId: draft.managerId,
+          teamIds: draft.teamIds,
+          startDate: draft.startDate || undefined,
+          deadline: draft.deadline,
+          visibleToClient: draft.visibleToClient,
+          currentStage: draft.currentStage.trim(),
+          progress: asNumber(draft.progress, 0),
+          clientFacingSummary: draft.clientFacingSummary.trim() || description,
+          internalNotes: draft.internalNotes.trim() || undefined,
+          initialStages: [
+            {
+              title: stageTitle,
+              description: draft.stageDescription.trim() || draft.clientFacingSummary.trim() || description,
+              order: 1,
+              status: draft.visibleToClient ? "SENT_TO_CLIENT" : "DRAFT",
+              visibleToClient: draft.visibleToClient,
+            },
+          ],
+          initialBriefing: briefingDescription
+            ? {
+                title: draft.briefingTitle.trim() || "Briefing inicial",
+                description: briefingDescription,
+                visibility: draft.visibleToClient ? "VISIBLE_TO_CLIENT" : "INTERNAL",
+              }
+            : undefined,
+          initialScheduleEvents: scheduleTitle && draft.scheduleDate
+            ? [
+                {
+                  title: scheduleTitle,
+                  type: "delivery",
+                  date: draft.scheduleDate,
+                  time: draft.scheduleTime.trim() || undefined,
+                  notes: draft.clientFacingSummary.trim() || description,
+                  visibleToClient: draft.visibleToClient,
+                },
+              ]
+            : undefined,
+          initialFinance: financeDescription && draft.financeAmount && draft.financeDueDate
+            ? {
+                description: financeDescription,
+                amount: asNumber(draft.financeAmount, 0),
+                dueDate: draft.financeDueDate,
+                installment: "1/1",
+                visibleToClient: draft.visibleToClient,
+              }
+            : undefined,
         });
       }
       if (activeSection === "briefings") {
@@ -759,9 +1237,67 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
     }
   }
 
+  function validateProjectDraft(nextDraft: DraftState) {
+    if (!nextDraft.managerId) return "Selecione o responsavel principal antes de salvar o projeto.";
+    if (!nextDraft.title.trim()) return "Informe o nome do projeto antes de salvar.";
+    if (nextDraft.projectType.trim().length < 2) return "Informe o tipo do projeto antes de salvar.";
+    if (nextDraft.description.trim().length < 3) return "Informe o escopo do projeto antes de salvar.";
+    if (!nextDraft.deadline) return "Informe o prazo final antes de salvar o projeto.";
+    if (nextDraft.currentStage.trim().length < 2) return "Informe a etapa atual antes de salvar o projeto.";
+    if (asNumber(nextDraft.progress, -1) < 0 || asNumber(nextDraft.progress, 101) > 100) return "Informe um progresso entre 0 e 100.";
+    return "";
+  }
+
+  async function saveProjectEdit() {
+    if (!editingProject) return;
+    const validation = validateProjectDraft(editDraft);
+    if (validation) {
+      setNotice(validation);
+      return;
+    }
+
+    const id = asString(editingProject.id);
+    if (!id) return;
+    setSaving(true);
+    setNotice("");
+    try {
+      await updateAdminProject(id, {
+        name: editDraft.title.trim(),
+        type: editDraft.projectType.trim(),
+        scope: editDraft.description.trim(),
+        description: editDraft.description.trim(),
+        status: editDraft.status,
+        priority: editDraft.priority,
+        managerId: editDraft.managerId,
+        teamIds: editDraft.teamIds,
+        startDate: editDraft.startDate || undefined,
+        deadline: editDraft.deadline,
+        visibleToClient: editDraft.visibleToClient,
+        currentStage: editDraft.currentStage.trim(),
+        progress: asNumber(editDraft.progress, 0),
+        clientFacingSummary: editDraft.clientFacingSummary.trim() || editDraft.description.trim(),
+        internalNotes: editDraft.internalNotes.trim() || undefined,
+      });
+      setEditingProject(null);
+      setEditDraft(emptyDraft);
+      setNotice("Projeto atualizado e refletido no Portal do Cliente.");
+      await loadData();
+    } catch (editError) {
+      setNotice(editError instanceof Error ? editError.message : "Nao foi possivel atualizar o projeto.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleAction(action: string, item: ApiRecord | AdminFileAsset | AdminClientRequestDto) {
     const id = asString((item as ApiRecord).id);
     if (!id) return;
+    if (action === "edit-project") {
+      setEditingProject(item as ApiRecord);
+      setEditDraft(projectToDraft(item as ApiRecord));
+      setNotice("");
+      return;
+    }
     setBusyKey(`${id}:${action.replace(/^.*-/, "")}`);
     setNotice("");
     try {
@@ -857,6 +1393,7 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
           <CreatePanel
             section={activeSection}
             clients={data.clients}
+            adminUsers={data.adminUsers}
             projects={data.projects}
             selectedClientId={selectedClientId}
             selectedProjectId={selectedProjectId}
@@ -868,6 +1405,20 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
             onDraftChange={setDraft}
             onSubmit={createRecord}
           />
+          {editingProject && activeSection === "projects" ? (
+            <ProjectEditPanel
+              project={editingProject}
+              adminUsers={data.adminUsers}
+              draft={editDraft}
+              saving={saving}
+              onDraftChange={setEditDraft}
+              onCancel={() => {
+                setEditingProject(null);
+                setEditDraft(emptyDraft);
+              }}
+              onSubmit={saveProjectEdit}
+            />
+          ) : null}
           <RecordsTable
             section={activeSection}
             items={visibleItems}

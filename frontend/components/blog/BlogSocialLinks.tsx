@@ -18,6 +18,14 @@ function InstagramIcon() {
   );
 }
 
+function FacebookIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5" aria-hidden="true">
+      <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.03 3.66 9.2 8.44 9.94v-7.03H7.9v-2.91h2.54V9.84c0-2.52 1.49-3.91 3.78-3.91 1.1 0 2.24.2 2.24.2v2.48h-1.26c-1.24 0-1.63.78-1.63 1.57v1.88h2.77l-.44 2.91h-2.33V22C18.34 21.26 22 17.09 22 12.06Z" />
+    </svg>
+  );
+}
+
 function LinkedinIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5" aria-hidden="true">
@@ -29,6 +37,7 @@ function LinkedinIcon() {
 const iconMap = {
   x: XIcon,
   instagram: InstagramIcon,
+  facebook: FacebookIcon,
   linkedin: LinkedinIcon,
 } as const;
 
@@ -36,13 +45,17 @@ export function BlogSocialLinks() {
   return (
     <nav className="flex gap-4 pt-1" aria-label="Redes sociais do blog">
       {blogContent.social.links.map((item) => {
-        const Icon = iconMap[item.icon];
+        const Icon = iconMap[item.icon as keyof typeof iconMap];
+
+        if (!Icon) return null;
 
         return (
           <a
             key={item.label}
             href={item.href}
             aria-label={item.label}
+            target="_blank"
+            rel="noreferrer"
             className="text-white transition-colors hover:text-zinc-400"
           >
             <Icon />

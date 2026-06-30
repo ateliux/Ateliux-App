@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { isApiError } from "@/lib/api/client";
 import { loginAdmin } from "@/services/admin-auth.service";
 
 export function AdminLoginPage() {
@@ -26,6 +27,11 @@ export function AdminLoginPage() {
       await loginAdmin({ email, password });
       router.push("/dashboard");
     } catch (requestError) {
+      if (isApiError(requestError) && requestError.status === 401) {
+        setError("E-mail ou senha administrativa invalidos.");
+        return;
+      }
+
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel entrar na admin.");
     } finally {
       setLoading(false);

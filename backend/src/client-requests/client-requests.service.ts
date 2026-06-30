@@ -1,5 +1,5 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { InboxChannel, InboxSource, RequestStatus } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { FileStatus, InboxChannel, InboxSource, Prisma, RequestStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RequestUser } from '../common/utils/request-user';
 import type { AdminCreateClientRequestDto } from './dto/admin-create-client-request.dto';
@@ -16,7 +16,11 @@ export class ClientRequestsService {
     return this.prisma.clientRequest.findMany({
       where: { clientId: user.clientId },
       orderBy: { createdAt: 'desc' },
-      include: { project: true, inboxConversation: { include: { messages: { include: { attachments: true } } } } },
+      include: {
+        project: true,
+        attachments: { include: { fileAsset: true } },
+        inboxConversation: { include: { messages: { include: { attachments: true } } } },
+      },
     });
   }
 
@@ -25,6 +29,8 @@ export class ClientRequestsService {
     const clientId = user.clientId;
 
     return this.prisma.$transaction(async (tx) => {
+      const fileAssetIds = await this.resolveClientFileAssetIds(tx, dto.fileAssetIds, clientId, dto.projectId);
+
       const conversation = await tx.inboxConversation.create({
         data: {
           clientId,
@@ -37,21 +43,18 @@ export class ClientRequestsService {
         },
       });
 
-      const message = await tx.inboxMessage.create({
+      await tx.inboxMessage.create({
         data: {
           conversationId: conversation.id,
           senderId: user.id,
           senderType: 'client',
           body: dto.description,
+          attachments: fileAssetIds.length
+            ? { connect: fileAssetIds.map((id) => ({ id })) }
+            : undefined,
         },
+        include: { attachments: true },
       });
-
-      if (dto.fileAssetIds?.length) {
-        await tx.fileAsset.updateMany({
-          where: { id: { in: dto.fileAssetIds }, clientId },
-          data: { messageId: message.id },
-        });
-      }
 
       return tx.clientRequest.create({
         data: {
@@ -62,6 +65,14 @@ export class ClientRequestsService {
           description: dto.description,
           category: dto.category,
           priority: dto.priority,
+          attachments: fileAssetIds.length
+            ? { create: fileAssetIds.map((fileAssetId) => ({ fileAssetId })) }
+            : undefined,
+        },
+        include: {
+          project: true,
+          attachments: { include: { fileAsset: true } },
+          inboxConversation: { include: { messages: { include: { attachments: true } } } },
         },
       });
     });
@@ -70,7 +81,12 @@ export class ClientRequestsService {
   findAdminAll() {
     return this.prisma.clientRequest.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { client: true, project: true, inboxConversation: { include: { messages: { include: { attachments: true } } } } },
+      include: {
+        client: true,
+        project: true,
+        attachments: { include: { fileAsset: true } },
+        inboxConversation: { include: { messages: { include: { attachments: true } } } },
+      },
     });
   }
 
@@ -137,5 +153,51 @@ export class ClientRequestsService {
     const request = await this.prisma.clientRequest.findUnique({ where: { id } });
     if (!request) throw new NotFoundException('Client request not found.');
     return request;
+  }
+
+  private async resolveClientFileAssetIds(
+    tx: Prisma.TransactionClient,
+    fileAssetIds: string[] | undefined,
+    clientId: string,
+    projectId?: string,
+  ) {
+    const ids = [...new Set(fileAssetIds ?? [])].filter(Boolean);
+    if (!ids.length) {
+      if (projectId) await this.ensureClientProject(tx, projectId, clientId);
+      return ids;
+    }
+
+    if (projectId) await this.ensureClientProject(tx, projectId, clientId);
+
+    const files = await tx.fileAsset.findMany({
+      where: {
+        id: { in: ids },
+        clientId,
+        deletedAt: null,
+        status: { not: FileStatus.DELETED },
+      },
+      select: { id: true, projectId: true },
+    });
+
+    if (files.length !== ids.length) {
+      throw new ForbiddenException('Um ou mais arquivos nao pertencem ao cliente autenticado.');
+    }
+
+    const crossProjectFile = projectId
+      ? files.find((file) => file.projectId && file.projectId !== projectId)
+      : undefined;
+    if (crossProjectFile) {
+      throw new BadRequestException('Arquivo anexado pertence a outro projeto.');
+    }
+
+    return ids;
+  }
+
+  private async ensureClientProject(tx: Prisma.TransactionClient, projectId: string, clientId: string) {
+    const project = await tx.project.findFirst({
+      where: { id: projectId, clientId },
+      select: { id: true },
+    });
+    if (!project) throw new ForbiddenException('Projeto nao pertence ao cliente autenticado.');
   }
 }

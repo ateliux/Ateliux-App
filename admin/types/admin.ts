@@ -41,8 +41,18 @@ export type AdminInboxSource = "portal_cliente" | "suporte" | "aprovacao" | "sol
 export type AdminInboxAttachment = {
   id: string;
   name: string;
+  originalName?: string;
+  extension?: string;
+  mimeType?: string;
   size: string;
-  type?: string;
+  sizeBytes: number;
+  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DELETED";
+  riskLevel: "SAFE_PREVIEW" | "DOWNLOAD_ONLY" | "HIGH_RISK_DOWNLOAD_ONLY";
+  downloadMode: "INLINE_ALLOWED" | "ATTACHMENT_ONLY";
+  context: string;
+  uploadedByType: string;
+  origin?: string;
+  rejectionReason?: string | null;
 };
 
 export type AdminInboxMessage = {
@@ -306,6 +316,7 @@ export type AdminBlogPost = {
   apiId?: string;
   title: string;
   slug: string;
+  categoryId?: string;
   tag: string;
   author: string;
   status: BlogPostStatus;
@@ -313,6 +324,22 @@ export type AdminBlogPost = {
   readTime: string;
   description: string;
   content: string;
+  coverFileId?: string | null;
+  coverUrl?: string;
+  heroImageFileId?: string | null;
+  heroImageUrl?: string;
+  insightTitle?: string;
+  insightDescription?: string;
+  insightCtaLabel?: string;
+  insightCtaHref?: string;
+  contextTitle?: string;
+  contextContent?: string;
+  practicalTitle?: string;
+  practicalContent?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  commentsCount?: number;
+  sharesCount?: number;
 };
 
 export type SupportTicketStatus = "Aberto" | "Respondido" | "Aguardando cliente" | "Encerrado";

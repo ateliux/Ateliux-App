@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { blogContent } from "../../content/blog";
+import { siteRoutes } from "../../data/siteRoutes";
 import { BlogSocialLinks } from "./BlogSocialLinks";
 import { MotionButton } from "../motion";
 import { subscribeNewsletter } from "@/services/newsletter.service";
@@ -11,6 +13,7 @@ export function BlogNewsletter() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -18,10 +21,17 @@ export function BlogNewsletter() {
     setSubmitted(false);
     setError("");
 
+    if (!privacyAccepted) {
+      setSubmitting(false);
+      setError("Aceite a Politica de Privacidade para assinar a newsletter.");
+      return;
+    }
+
     try {
       await subscribeNewsletter({ email, origin: "blog" });
       setSubmitted(true);
       setEmail("");
+      setPrivacyAccepted(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel registrar sua inscricao.");
     } finally {
@@ -37,27 +47,47 @@ export function BlogNewsletter() {
             {blogContent.newsletter.title}
           </h2>
 
-          <form className="flex flex-col gap-3 sm:flex-row" onSubmit={handleSubmit}>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                setSubmitted(false);
-                setError("");
-              }}
-              placeholder={blogContent.newsletter.placeholder}
-              required
-              className="w-full rounded-full border border-white/10 bg-[#0A0A0C] px-6 py-3 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-white/30 sm:w-80"
-            />
+          <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setSubmitted(false);
+                  setError("");
+                }}
+                placeholder={blogContent.newsletter.placeholder}
+                required
+                className="w-full rounded-full border border-white/10 bg-[#0A0A0C] px-6 py-3 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-white/30 sm:w-80"
+              />
 
-            <MotionButton
-              type="submit"
-              disabled={submitting}
-              className="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-black transition-colors hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-black"
-            >
-              {submitting ? "Enviando..." : blogContent.newsletter.ctaLabel}
-            </MotionButton>
+              <MotionButton
+                type="submit"
+                disabled={submitting || !privacyAccepted}
+                className="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-black transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-black"
+              >
+                {submitting ? "Enviando..." : blogContent.newsletter.ctaLabel}
+              </MotionButton>
+            </div>
+            <label className="flex max-w-xl items-start gap-2 text-xs leading-5 text-zinc-500">
+              <input
+                type="checkbox"
+                checked={privacyAccepted}
+                onChange={(event) => {
+                  setPrivacyAccepted(event.target.checked);
+                  setError("");
+                }}
+                className="mt-1 h-3.5 w-3.5 accent-white"
+              />
+              <span>
+                Aceito receber comunicacoes da Ateliux e confirmo a leitura da{" "}
+                <Link href={siteRoutes.privacy} className="font-semibold text-zinc-200 underline">
+                  Politica de Privacidade
+                </Link>
+                .
+              </span>
+            </label>
           </form>
           <p aria-live="polite" className="text-xs text-zinc-500">
             {error || (submitted ? "Inscricao registrada com sucesso." : "")}

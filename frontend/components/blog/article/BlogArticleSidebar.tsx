@@ -9,6 +9,9 @@ type BlogArticleSidebarProps = {
 };
 
 export function BlogArticleSidebar({ article }: BlogArticleSidebarProps) {
+  const ctaHref = article.sideNote.ctaHref || contactRoute({ subject: "artigo-blog" });
+  const ctaLabel = article.sideNote.ctaLabel || "Falar com a Ateliux";
+
   return (
     <aside className="space-y-14 lg:sticky lg:top-28 lg:self-start">
       <section className="relative min-h-[360px] overflow-hidden border border-white/[0.08] bg-[#121214] p-7">
@@ -30,10 +33,10 @@ export function BlogArticleSidebar({ article }: BlogArticleSidebarProps) {
               {article.sideNote.description}
             </p>
             <Link
-              href={contactRoute({ subject: "artigo-blog" })}
+              href={ctaHref}
               className="mt-6 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-black"
             >
-              Falar com a Ateliux
+              {ctaLabel}
               <ArrowUpRight className="h-4 w-4" />
             </Link>
           </div>

@@ -6,7 +6,8 @@ export const authConfig = registerAs('auth', () => ({
   jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? '15m',
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
   cookieSecret: process.env.COOKIE_SECRET,
-  cookieDomain: process.env.COOKIE_DOMAIN ?? 'localhost',
+  cookieDomain: process.env.COOKIE_DOMAIN ?? '',
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   cookieSameSite: process.env.COOKIE_SAME_SITE ?? 'lax',
+  authDebug: process.env.AUTH_DEBUG === 'true',
 }));

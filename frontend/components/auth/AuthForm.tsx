@@ -7,9 +7,8 @@ import { Eye, EyeOff } from "lucide-react";
 import { authContent } from "../../content/auth";
 import { siteRoutes } from "../../data/siteRoutes";
 import type { AuthMode } from "./AuthPage";
-import { AuthSocialButton } from "./AuthSocialButton";
 import { useAuth } from "./MockAuthProvider";
-import { MotionButton, MotionContainer, MotionForm, MotionItem } from "../motion";
+import { MotionButton, MotionForm, MotionItem } from "../motion";
 
 type AuthFormProps = {
   mode: AuthMode;
@@ -24,7 +23,6 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [submitting, setSubmitting] = useState(false);
 
   const content = authContent.forms[mode];
-  const shouldShowSocialAuth = mode === "register";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,6 +32,8 @@ export function AuthForm({ mode }: AuthFormProps) {
     const password = String(formData.get("password") ?? "").trim();
     const name = String(formData.get("name") ?? "").trim();
     const company = String(formData.get("company") ?? "").trim();
+    const acceptTerms = formData.get("acceptTerms") === "on";
+    const acceptPrivacy = formData.get("acceptPrivacy") === "on";
 
     if (!email || !password || (mode === "register" && (!name || !company))) {
       setFormError(
@@ -44,11 +44,26 @@ export function AuthForm({ mode }: AuthFormProps) {
       return;
     }
 
+    if (mode === "register" && (!acceptTerms || !acceptPrivacy)) {
+      setFormError("Aceite os Termos de Uso e a Politica de Privacidade para criar sua conta.");
+      return;
+    }
+
     setFormError("");
     setSubmitting(true);
     try {
       if (mode === "register") {
-        await register({ name, company, email, password });
+        await register({
+          name,
+          company,
+          email,
+          password,
+          acceptTerms,
+          acceptPrivacy,
+          marketingOptIn: receiveUpdates,
+          termsVersion: "2026-06-terms-v1",
+          privacyVersion: "2026-06-privacy-v1",
+        });
       } else {
         await login({ email, password });
       }
@@ -72,27 +87,6 @@ export function AuthForm({ mode }: AuthFormProps) {
             {content.description}
           </p>
         </div>
-
-        {shouldShowSocialAuth ? (
-          <>
-            <MotionContainer className="mb-6 flex flex-col gap-3">
-              <MotionItem staggered>
-                <AuthSocialButton provider="google" label={content.googleLabel} />
-              </MotionItem>
-              <MotionItem staggered>
-                <AuthSocialButton provider="apple" label={content.appleLabel} />
-              </MotionItem>
-            </MotionContainer>
-
-            <div className="mb-6 flex items-center">
-              <div className="flex-1 border-t border-[#262729]" />
-              <span className="px-4 text-[11px] font-semibold uppercase tracking-wider text-[#555555]">
-                {authContent.shared.divider}
-              </span>
-              <div className="flex-1 border-t border-[#262729]" />
-            </div>
-          </>
-        ) : null}
 
         <MotionForm className="flex flex-col gap-4" onSubmit={handleSubmit}>
           {mode === "register" ? (
@@ -202,6 +196,33 @@ export function AuthForm({ mode }: AuthFormProps) {
             ) : null}
           </div>
           </MotionItem>
+
+          {mode === "register" ? (
+            <MotionItem staggered>
+              <div className="space-y-3 border border-white/[0.08] bg-[#121214] p-4">
+                <label className="flex items-start gap-3 text-[11px] leading-5 text-[#888888]">
+                  <input name="acceptTerms" type="checkbox" className="mt-1 h-3.5 w-3.5 accent-white" />
+                  <span>
+                    Li e aceito os{" "}
+                    <Link href={siteRoutes.terms} className="font-semibold text-white hover:underline">
+                      Termos de Uso
+                    </Link>
+                    .
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 text-[11px] leading-5 text-[#888888]">
+                  <input name="acceptPrivacy" type="checkbox" className="mt-1 h-3.5 w-3.5 accent-white" />
+                  <span>
+                    Li e aceito a{" "}
+                    <Link href={siteRoutes.privacy} className="font-semibold text-white hover:underline">
+                      Politica de Privacidade
+                    </Link>
+                    .
+                  </span>
+                </label>
+              </div>
+            </MotionItem>
+          ) : null}
 
           {formError ? (
             <p className="text-[12px] leading-relaxed text-red-300" role="alert">

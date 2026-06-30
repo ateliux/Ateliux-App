@@ -2,6 +2,7 @@ import Link from "next/link";
 import { blogContent, type BlogPost } from "../../content/blog";
 import { blogPostRoute } from "../../data/siteRoutes";
 import { BlogArtwork } from "./BlogArtwork";
+import { BlogImagePlaceholder } from "./BlogImagePlaceholder";
 import { MotionCard } from "../motion";
 
 export function FeaturedPost({ post = blogContent.featuredPost }: { post?: BlogPost }) {
@@ -23,7 +24,7 @@ export function FeaturedPost({ post = blogContent.featuredPost }: { post?: BlogP
                 {post.title}
               </h2>
 
-              <p className="text-sm leading-relaxed text-zinc-400 md:text-base">
+              <p className="line-clamp-2 text-sm leading-relaxed text-zinc-400 md:text-base">
                 {post.description}
               </p>
             </div>
@@ -34,7 +35,18 @@ export function FeaturedPost({ post = blogContent.featuredPost }: { post?: BlogP
           </div>
 
           <div className="relative min-h-[300px] w-full bg-[#4652F6] md:min-h-full md:w-[55%]">
-            <BlogArtwork artwork={post.artwork} />
+            {post.coverUrl ? (
+              <img
+                src={post.coverUrl}
+                alt=""
+                className="h-full min-h-[300px] w-full object-cover"
+                loading="lazy"
+              />
+            ) : !post.id ? (
+              <BlogArtwork artwork={post.artwork} />
+            ) : (
+              <BlogImagePlaceholder />
+            )}
           </div>
         </article>
       </Link>

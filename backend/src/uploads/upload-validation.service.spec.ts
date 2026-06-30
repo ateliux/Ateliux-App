@@ -27,7 +27,7 @@ describe('UploadValidationService', () => {
 
   it('rejeita arquivo vazio ou ausente', async () => {
     await assert.rejects(
-      () => service.validate(undefined, { context: 'client_file', clientId: 'client-1', actorType: 'client' }),
+      () => service.validate(undefined, { context: 'client_file', clientId: 'client-1', actorType: 'CLIENT' }),
       /Arquivo obrigatorio/,
     );
   });
@@ -41,7 +41,7 @@ describe('UploadValidationService', () => {
           service.validate(multerFile(`malicious${extension}`, 'application/pdf', pdfBuffer), {
             context: 'client_file',
             clientId: 'client-1',
-            actorType: 'client',
+            actorType: 'CLIENT',
           }),
         /bloqueada|nao permitida/,
       );
@@ -53,7 +53,7 @@ describe('UploadValidationService', () => {
       () =>
         service.validate(multerFile('documento.pdf', 'application/pdf', pdfBuffer), {
           context: 'avatar',
-          actorType: 'client',
+          actorType: 'CLIENT',
         }),
       /Extensao nao permitida/,
     );
@@ -65,7 +65,7 @@ describe('UploadValidationService', () => {
         service.validate(multerFile('documento.pdf', 'text/plain', pdfBuffer), {
           context: 'client_file',
           clientId: 'client-1',
-          actorType: 'client',
+          actorType: 'CLIENT',
         }),
       /MIME type informado/,
     );
@@ -77,7 +77,7 @@ describe('UploadValidationService', () => {
         service.validate(multerFile('contrato.pdf', 'application/pdf', htmlBuffer), {
           context: 'client_file',
           clientId: 'client-1',
-          actorType: 'client',
+          actorType: 'CLIENT',
         }),
       /validar o tipo real/,
     );
@@ -89,7 +89,7 @@ describe('UploadValidationService', () => {
         service.validate(multerFile('grande.pdf', 'application/pdf', pdfBuffer, 11 * 1024 * 1024), {
           context: 'client_file',
           clientId: 'client-1',
-          actorType: 'client',
+          actorType: 'CLIENT',
         }),
       /excede o limite/,
     );
@@ -100,7 +100,7 @@ describe('UploadValidationService', () => {
       () =>
         service.validate(multerFile('documento.pdf', 'application/pdf', pdfBuffer), {
           context: 'client_file',
-          actorType: 'admin',
+          actorType: 'ADMIN',
         }),
       /clientId obrigatorio/,
     );
@@ -110,7 +110,7 @@ describe('UploadValidationService', () => {
     const validated = await service.validate(multerFile('../../contrato<script>.pdf', 'application/pdf', pdfBuffer), {
       context: 'client_file',
       clientId: 'client-1',
-      actorType: 'client',
+      actorType: 'CLIENT',
     });
 
     assert.equal(validated.detectedMime, 'application/pdf');
@@ -122,9 +122,94 @@ describe('UploadValidationService', () => {
     const validated = await service.validate(multerFile('avatar.png', 'image/png', pngBuffer), {
       context: 'avatar',
       clientId: 'client-1',
-      actorType: 'client',
+      actorType: 'CLIENT',
     });
 
     assert.equal(validated.detectedMime, 'image/png');
+  });
+
+  it('aceita alias image/jpg para imagem de blog valida', async () => {
+    const jpegBuffer = Buffer.from([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46,
+      0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48,
+      0x00, 0x48, 0x00, 0x00, 0xff, 0xd9,
+    ]);
+
+    const validated = await service.validate(multerFile('capa.jpg', 'image/jpg', jpegBuffer), {
+      context: 'blog_cover',
+      actorType: 'ADMIN',
+    });
+
+    assert.equal(validated.providedMime, 'image/jpeg');
+    assert.equal(validated.detectedMime, 'image/jpeg');
+  });
+
+  it('aceita .jfif para imagem interna/background do blog', async () => {
+    const jfifBuffer = Buffer.from([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46,
+      0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48,
+      0x00, 0x48, 0x00, 0x00, 0xff, 0xd9,
+    ]);
+
+    const validated = await service.validate(multerFile('background.jfif', 'image/jpeg', jfifBuffer), {
+      context: 'blog_hero',
+      actorType: 'ADMIN',
+    });
+
+    assert.equal(validated.names.extension, '.jfif');
+    assert.equal(validated.detectedMime, 'image/jpeg');
+  });
+
+  it('rejeita cliente tentando usar contexto administrativo de blog', async () => {
+    await assert.rejects(
+      () =>
+        service.validate(multerFile('capa.png', 'image/png', pngBuffer), {
+          context: 'blog_cover',
+          actorType: 'CLIENT',
+        }),
+      /Clientes nao podem enviar/,
+    );
+  });
+
+  it('rejeita publico tentando usar contexto administrativo de blog', async () => {
+    await assert.rejects(
+      () =>
+        service.validate(multerFile('capa.png', 'image/png', pngBuffer), {
+          context: 'blog_cover',
+          actorType: 'PUBLIC',
+        }),
+      /Upload publico nao permitido/,
+    );
+  });
+
+  it('aceita formatos amplos para admin em arquivos do portal', async () => {
+    const samples = [
+      multerFile('entrega.zip', 'application/zip', Buffer.from([0x50, 0x4b, 0x03, 0x04])),
+      multerFile('layout.svg', 'image/svg+xml', Buffer.from('<svg viewBox="0 0 1 1"></svg>')),
+      multerFile('tokens.json', 'application/json', Buffer.from('{"brand":"ateliux"}')),
+      multerFile('design.psd', 'application/octet-stream', Buffer.from('8BPS\x00\x01')),
+    ];
+
+    for (const sample of samples) {
+      const validated = await service.validate(sample, {
+        context: 'client_file',
+        clientId: 'client-1',
+        actorType: 'ADMIN',
+      });
+
+      assert.equal(validated.names.originalName, sample.originalname);
+      assert.ok(validated.names.extension);
+    }
+  });
+
+  it('aceita admin com MIME desconhecido quando file-type nao detecta magic bytes', async () => {
+    const validated = await service.validate(multerFile('referencia.fig', '', Buffer.from('figma-source')), {
+      context: 'preview_asset',
+      clientId: 'client-1',
+      actorType: 'ADMIN',
+    });
+
+    assert.equal(validated.providedMime, 'application/octet-stream');
+    assert.equal(validated.detectedMime, null);
   });
 });

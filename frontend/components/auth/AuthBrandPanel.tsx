@@ -1,6 +1,12 @@
 import Link from "next/link";
-import { ArrowLeft, Layers } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft } from "lucide-react";
 import { authContent } from "../../content/auth";
+
+const authBrandAssets = {
+  icon: "https://res.cloudinary.com/df4wjugxk/image/upload/v1782784827/Trocar_Preto_por_Branco_1_v86v89.png",
+  logotype: "https://res.cloudinary.com/df4wjugxk/image/upload/v1782785752/Logotipo_Branca_-_1_-_Editado_j50hzi.png",
+} as const;
 
 export function AuthBrandPanel() {
   return (
@@ -16,14 +22,27 @@ export function AuthBrandPanel() {
       </div>
 
       <div className="mt-24 md:mt-0">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex items-center justify-center bg-white p-1.5 text-black">
-            <Layers className="h-5 w-5" />
+        <div className="mb-8 flex items-center gap-5">
+          <div className="relative h-14 w-14 shrink-0 overflow-hidden">
+            <Image
+              src={authBrandAssets.icon}
+              alt=""
+              fill
+              sizes="56px"
+              className="object-contain"
+              priority
+            />
           </div>
 
-          <span className="text-lg font-semibold tracking-wide text-white">
-            {authContent.brand.name}
-          </span>
+          <Image
+            src={authBrandAssets.logotype}
+            alt={authContent.brand.name}
+            width={210}
+            height={52}
+            sizes="210px"
+            className="h-9 w-auto max-w-[210px] object-contain"
+            priority
+          />
         </div>
 
         <p className="mb-16 max-w-sm text-[13px] leading-[1.6] text-[#888888]">

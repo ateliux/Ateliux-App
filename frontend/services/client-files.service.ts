@@ -31,6 +31,8 @@ export function mapFileAssetToClientFile(asset: FileAssetDto): ClientFile {
     date: new Date(asset.createdAt).toLocaleDateString("pt-BR"),
     size: formatBytes(asset.size),
     status: statusMap[asset.status],
+    riskLevel: asset.riskLevel,
+    downloadMode: asset.downloadMode,
     context: asset.context,
     projectId: asset.projectId,
     rejectionReason: asset.rejectionReason,
@@ -65,5 +67,5 @@ export async function uploadClientRequestAttachment(file: File) {
 }
 
 export async function getClientFileSignedUrl(fileAssetId: string) {
-  return apiRequest<{ url: string }>(`/files/${fileAssetId}/signed-url`);
+  return apiRequest<{ url: string; riskLevel: FileAssetDto["riskLevel"]; downloadMode: FileAssetDto["downloadMode"] }>(`/files/${fileAssetId}/signed-url`);
 }

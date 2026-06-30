@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { CheckCircle2, Send } from "lucide-react";
 import { supportContent } from "../../content/support";
+import { siteRoutes } from "../../data/siteRoutes";
 import { MotionButton } from "../motion";
 import { createPublicSupportTicket } from "@/services/support.service";
 
@@ -112,7 +114,11 @@ export function SupportRequestForm() {
 
         <div className="flex flex-col gap-4 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-sm text-xs leading-5 text-slate-400">
-            O chamado sera enviado para a API da Ateliux e acompanhado pela equipe de suporte.
+            O chamado sera enviado para a API da Ateliux e acompanhado pela equipe de suporte. Dados do atendimento seguem a{" "}
+            <Link href={siteRoutes.privacy} className="font-semibold text-slate-700 underline">
+              Politica de Privacidade
+            </Link>
+            .
           </p>
 
           <MotionButton

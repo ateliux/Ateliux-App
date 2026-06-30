@@ -10,7 +10,7 @@ export const mainNavigation = [
     href: siteRoutes.useCases,
   },
   {
-    label: "Preços",
+    label: "Precos",
     href: siteRoutes.pricing,
   },
   {
@@ -25,26 +25,38 @@ export const mainNavigation = [
 
 export const socialNavigation = [
   {
-    label: "Twitter",
-    href: "#",
+    label: "X",
+    href: "https://x.com/ateliux",
   },
   {
     label: "Instagram",
-    href: "#",
+    href: "https://www.instagram.com/ateliux/",
+  },
+  {
+    label: "Facebook",
+    href: "https://www.facebook.com/profile.php?id=61586258123612",
   },
   {
     label: "LinkedIn",
-    href: "#",
+    href: "https://www.linkedin.com/in/ateliux-company/",
   },
 ] as const;
 
 export const legalNavigation = [
   {
-    label: "Termos e Condições",
+    label: "Politica de Privacidade",
+    href: siteRoutes.privacy,
+  },
+  {
+    label: "Politica de Cookies",
+    href: siteRoutes.cookiePolicy,
+  },
+  {
+    label: "Termos de Uso",
     href: siteRoutes.terms,
   },
   {
-    label: "Privacidade",
-    href: siteRoutes.privacy,
+    label: "LGPD",
+    href: siteRoutes.lgpd,
   },
 ] as const;

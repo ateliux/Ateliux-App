@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api/client";
-import type { AdminInboxConversation, AdminInboxPriority, AdminInboxSource, AdminInboxStatus } from "@/types/admin";
+import type { AdminInboxAttachment, AdminInboxConversation, AdminInboxPriority, AdminInboxSource, AdminInboxStatus } from "@/types/admin";
 
 type ApiInboxChannel = "CLIENTS" | "SUPPORT";
 type ApiInboxStatus = "NEW" | "OPEN" | "IN_PROGRESS" | "WAITING_CLIENT" | "RESOLVED" | "ARCHIVED";
@@ -12,7 +12,24 @@ type ApiInboxMessage = {
   senderType: string;
   body: string;
   createdAt: string;
-  attachments?: Array<{ id: string; originalName?: string; name: string; size: number; extension?: string }>;
+  attachments?: ApiInboxAttachment[];
+};
+
+type ApiInboxAttachment = {
+  id: string;
+  originalName?: string | null;
+  safeName?: string | null;
+  name: string;
+  extension?: string | null;
+  mimeType?: string | null;
+  size: number;
+  status: AdminInboxAttachment["status"];
+  riskLevel?: AdminInboxAttachment["riskLevel"] | null;
+  downloadMode?: AdminInboxAttachment["downloadMode"] | null;
+  context?: string | null;
+  uploadedByType?: string | null;
+  origin?: string | null;
+  rejectionReason?: string | null;
 };
 
 type ApiInboxConversation = {
@@ -85,6 +102,25 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(value));
 }
 
+function mapAttachment(attachment: ApiInboxAttachment): AdminInboxAttachment {
+  return {
+    id: attachment.id,
+    name: attachment.originalName ?? attachment.name,
+    originalName: attachment.originalName ?? undefined,
+    extension: attachment.extension ?? undefined,
+    mimeType: attachment.mimeType ?? undefined,
+    size: formatBytes(attachment.size),
+    sizeBytes: attachment.size,
+    status: attachment.status,
+    riskLevel: attachment.riskLevel ?? "DOWNLOAD_ONLY",
+    downloadMode: attachment.downloadMode ?? "ATTACHMENT_ONLY",
+    context: attachment.context ?? "CLIENT_FILE",
+    uploadedByType: attachment.uploadedByType ?? "SYSTEM",
+    origin: attachment.origin ?? undefined,
+    rejectionReason: attachment.rejectionReason ?? undefined,
+  };
+}
+
 export function mapAdminInboxConversation(conversation: ApiInboxConversation): AdminInboxConversation {
   return {
     id: conversation.id,
@@ -110,12 +146,7 @@ export function mapAdminInboxConversation(conversation: ApiInboxConversation): A
       body: message.body,
       createdAt: formatDate(message.createdAt),
       from: message.senderType === "ateliux" ? "ateliux" : message.senderType === "system" ? "sistema" : "cliente",
-      attachments: message.attachments?.map((attachment) => ({
-        id: attachment.id,
-        name: attachment.originalName ?? attachment.name,
-        size: formatBytes(attachment.size),
-        type: attachment.extension,
-      })),
+      attachments: message.attachments?.map(mapAttachment),
     })),
   };
 }
@@ -123,6 +154,11 @@ export function mapAdminInboxConversation(conversation: ApiInboxConversation): A
 export async function listAdminInboxConversations() {
   const conversations = await apiRequest<ApiInboxConversation[]>("/admin/inbox/conversations");
   return conversations.map(mapAdminInboxConversation);
+}
+
+export async function getAdminInboxConversation(conversationId: string) {
+  const conversation = await apiRequest<ApiInboxConversation>(`/admin/inbox/conversations/${conversationId}`);
+  return mapAdminInboxConversation(conversation);
 }
 
 export async function sendAdminInboxMessage(conversationId: string, body: string) {

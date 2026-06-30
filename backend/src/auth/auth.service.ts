@@ -1,10 +1,12 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
-import { AccountStatus, UserRole } from '@prisma/client';
+import { AccountStatus, type AdminRole, UserRole } from '@prisma/client';
 import { compare, hash } from 'bcryptjs';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RequestUser } from '../common/utils/request-user';
+import { expiresAtFromNow } from './auth-time';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterClientDto } from './dto/register-client.dto';
 
@@ -23,16 +25,10 @@ type SafeAuthUser = {
   clientId?: string;
 };
 
-function expiresAtFromNow(value: string) {
-  const match = /^(\d+)([smhd])$/.exec(value);
-  if (!match) return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-  const amount = Number(match[1]);
-  const unit = match[2];
-  const multiplier = unit === 's' ? 1000 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 86_400_000;
-
-  return new Date(Date.now() + amount * multiplier);
-}
+type RefreshJwtPayload = {
+  sub: string;
+  tokenUse?: string;
+};
 
 @Injectable()
 export class AuthService {
@@ -43,6 +39,10 @@ export class AuthService {
   ) {}
 
   async registerClient(dto: RegisterClientDto) {
+    if (!dto.acceptTerms || !dto.acceptPrivacy) {
+      throw new BadRequestException('Termos de uso e politica de privacidade devem ser aceitos.');
+    }
+
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) {
       throw new ConflictException('E-mail already registered.');
@@ -77,6 +77,24 @@ export class AuthService {
           clientId: client.id,
           inviteStatus: AccountStatus.ACTIVE,
           lastAccessAt: new Date(),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: user.id,
+          actorType: 'client',
+          action: 'CLIENT_LEGAL_ACCEPTANCE_REGISTERED',
+          entityType: 'ClientAccount',
+          clientId: client.id,
+          metadata: {
+            acceptTerms: dto.acceptTerms,
+            acceptPrivacy: dto.acceptPrivacy,
+            marketingOptIn: Boolean(dto.marketingOptIn),
+            termsVersion: dto.termsVersion ?? '2026-06-terms-v1',
+            privacyVersion: dto.privacyVersion ?? '2026-06-privacy-v1',
+            legalReviewRequired: true,
+          },
         },
       });
 
@@ -179,6 +197,40 @@ export class AuthService {
     return { success: true };
   }
 
+  async logoutByRefreshToken(refreshToken: string | null) {
+    if (!refreshToken) return { success: true };
+
+    try {
+      const payload = await this.verifyRefreshToken(refreshToken);
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: payload.sub, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    } catch {
+      return { success: true };
+    }
+
+    return { success: true };
+  }
+
+  async refreshClient(refreshToken: string | null) {
+    const session = await this.refresh(refreshToken, UserRole.CLIENT);
+    return {
+      user: session.user,
+      client: session.client,
+      tokens: session.tokens,
+    };
+  }
+
+  async refreshAdmin(refreshToken: string | null) {
+    const session = await this.refresh(refreshToken, UserRole.ADMIN);
+    return {
+      user: session.user,
+      admin: session.admin,
+      tokens: session.tokens,
+    };
+  }
+
   async me(user: RequestUser) {
     if (user.role === UserRole.CLIENT) {
       const account = await this.prisma.clientAccount.findUnique({
@@ -226,6 +278,115 @@ export class AuthService {
     }
   }
 
+  private async refresh(refreshToken: string | null, expectedRole: UserRole) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token missing.');
+    }
+
+    const payload = await this.verifyRefreshToken(refreshToken);
+    const storedToken = await this.findValidStoredRefreshToken(payload.sub, refreshToken);
+    if (!storedToken) {
+      throw new UnauthorizedException('Invalid refresh token.');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: {
+        adminProfile: true,
+        clientAccount: { include: { client: true } },
+      },
+    });
+
+    if (!user || user.status !== AccountStatus.ACTIVE || user.role !== expectedRole) {
+      await this.prisma.refreshToken.update({
+        where: { id: storedToken.id },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('Invalid refresh token.');
+    }
+
+    if (expectedRole === UserRole.ADMIN && !user.adminProfile) {
+      throw new UnauthorizedException('Invalid admin refresh token.');
+    }
+
+    if (expectedRole === UserRole.CLIENT && !user.clientAccount) {
+      throw new UnauthorizedException('Invalid client refresh token.');
+    }
+
+    await this.prisma.refreshToken.update({
+      where: { id: storedToken.id },
+      data: { revokedAt: new Date() },
+    });
+
+    const requestUser =
+      expectedRole === UserRole.ADMIN
+        ? {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            adminRole: user.adminProfile!.role,
+            adminUserId: user.adminProfile!.id,
+          }
+        : {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            clientId: user.clientAccount!.clientId,
+          };
+
+    const tokens = await this.issueTokens(requestUser);
+
+    return {
+      user: this.safeUser({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        ...(user.adminProfile
+          ? { adminRole: user.adminProfile.role as AdminRole }
+          : { clientId: user.clientAccount!.clientId }),
+      }),
+      admin: user.adminProfile,
+      client: user.clientAccount?.client ?? null,
+      tokens,
+    };
+  }
+
+  private async verifyRefreshToken(refreshToken: string) {
+    try {
+      const payload = await this.jwt.verifyAsync<RefreshJwtPayload>(refreshToken, {
+        secret: this.config.getOrThrow<string>('auth.jwtRefreshSecret'),
+      });
+
+      if (payload.tokenUse !== 'refresh') {
+        throw new UnauthorizedException('Invalid refresh token.');
+      }
+
+      return payload;
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token.');
+    }
+  }
+
+  private async findValidStoredRefreshToken(userId: string, refreshToken: string) {
+    const activeTokens = await this.prisma.refreshToken.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    for (const storedToken of activeTokens) {
+      if (await this.refreshTokenMatches(refreshToken, storedToken.tokenHash)) {
+        return storedToken;
+      }
+    }
+
+    return null;
+  }
+
   private async issueTokens(payload: RequestUser): Promise<AuthTokens> {
     const refreshExpiresAt = expiresAtFromNow(
       this.config.getOrThrow<string>('auth.jwtRefreshExpiresIn'),
@@ -256,6 +417,7 @@ export class AuthService {
         {
           sub: payload.id,
           tokenUse: 'refresh',
+          jti: randomUUID(),
         },
         {
           secret: this.config.getOrThrow<string>('auth.jwtRefreshSecret'),
@@ -267,12 +429,26 @@ export class AuthService {
     await this.prisma.refreshToken.create({
       data: {
         userId: payload.id,
-        tokenHash: await hash(refreshToken, 12),
+        tokenHash: this.hashRefreshToken(refreshToken),
         expiresAt: refreshExpiresAt,
       },
     });
 
     return { accessToken, refreshToken, refreshExpiresAt };
+  }
+
+  private hashRefreshToken(refreshToken: string) {
+    return createHash('sha256').update(refreshToken).digest('hex');
+  }
+
+  private async refreshTokenMatches(refreshToken: string, storedHash: string) {
+    if (storedHash.startsWith('$2')) {
+      return compare(refreshToken, storedHash);
+    }
+
+    const currentHash = Buffer.from(this.hashRefreshToken(refreshToken), 'hex');
+    const persistedHash = Buffer.from(storedHash, 'hex');
+    return currentHash.length === persistedHash.length && timingSafeEqual(currentHash, persistedHash);
   }
 
   private safeUser(user: SafeAuthUser): SafeAuthUser {

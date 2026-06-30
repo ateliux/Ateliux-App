@@ -22,6 +22,18 @@ import {
 } from '@prisma/client';
 import { hash } from 'bcryptjs';
 
+function assertDemoSeedAllowed() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('seed.dev.ts bloqueado em producao.');
+  }
+
+  if (process.env.ALLOW_DEMO_SEED !== 'true') {
+    throw new Error('Defina ALLOW_DEMO_SEED=true para rodar seed demo.');
+  }
+}
+
+assertDemoSeedAllowed();
+
 const prisma = new PrismaClient();
 
 async function upsertAdmin(email: string, name: string, role: AdminRole) {

@@ -186,6 +186,7 @@ attendance: leads de contato, clientes, inbox e suporte
 | `/portal-do-cliente/clientes` | Clientes do Portal | `PORTAL_CLIENTS` | listar e acessar workspace | `/admin/portal/clients` | project_manager/admin |
 | `/portal-do-cliente/clientes/[clientId]` | Workspace por cliente | mocks scoped | manipular módulos do cliente | endpoints por cliente | project_manager/admin |
 | `/portal-do-cliente/projetos` | Projetos do portal | `PORTAL_PROJECTS_SCOPED` | criar, editar, enviar, avançar, arquivar/excluir | `/admin/clients/:clientId/projects` | project_manager/admin |
+| `/portal-do-cliente/projetos/[projectId]` | Central operacional do projeto | API real `GET /admin/projects/:id/overview` | visualizar projeto, cliente, equipe, escopo, etapas, briefing, arquivos, aprovações, preview, cronograma, financeiro, histórico e configurações do Portal | `/admin/projects/:id/overview` e endpoints de módulos existentes | admin/project_manager/designer_dev/support/finance |
 | `/portal-do-cliente/briefings` | Briefings por cliente | `PORTAL_BRIEFINGS` | criar, editar, enviar, arquivar, excluir | `/admin/briefings` | project_manager/admin |
 | `/portal-do-cliente/etapas` | Etapas por projeto | `PORTAL_STAGES_SCOPED` | criar, editar, enviar, solicitar aprovação, concluir, excluir | `/admin/stages` | project_manager/designer_dev |
 | `/portal-do-cliente/aprovacoes` | Aprovações | `PORTAL_APPROVALS_SCOPED` | criar, editar, enviar, aprovar manualmente, solicitar ajustes, excluir | `/admin/approvals` | project_manager/designer_dev |
@@ -348,7 +349,8 @@ Frontend mostra projetos do cliente logado. Admin cria, edita, arquiva e control
 GET    /client/projects
 GET    /client/projects/:id
 GET    /admin/clients/:clientId/projects
-POST   /admin/projects
+POST   /admin/projects/full-setup
+POST   /admin/projects          # legado bloqueado; nao cria projeto
 PATCH  /admin/projects/:id
 DELETE /admin/projects/:id
 ```
@@ -686,7 +688,9 @@ S3_SECRET_ACCESS_KEY=
 | Clientes admin | POST | `/admin/clients` | admin | sim | admin/project_manager | Cria cliente |
 | Clientes admin | PATCH | `/admin/clients/:id` | admin | sim | admin/project_manager | Edita cliente |
 | Portal projetos | GET | `/client/projects` | frontend | sim | cliente | Projetos do cliente |
-| Portal projetos admin | POST | `/admin/projects` | admin | sim | project_manager | Cria projeto |
+| Portal projetos admin | POST | `/admin/projects/full-setup` | admin | sim | project_manager | Cria projeto completo com responsavel, equipe, etapa inicial e opcionais |
+| Portal projetos admin | POST | `/admin/projects` | admin | sim | project_manager | Legado bloqueado; retorna erro de substituicao |
+| Portal projetos admin | GET | `/admin/projects/:id/overview` | admin | sim | admin/project_manager/designer_dev/support/finance | Central operacional agregada por projeto; financeiro oculto para roles sem permissao |
 | Briefings cliente | POST | `/client/briefings/:id/response` | frontend | sim | cliente | Responde briefing |
 | Briefings admin | POST | `/admin/briefings/:id/send` | admin | sim | project_manager | Envia briefing |
 | Etapas cliente | GET | `/client/projects/:projectId/stages` | frontend | sim | cliente | Lista etapas |

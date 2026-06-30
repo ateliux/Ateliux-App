@@ -20,15 +20,27 @@ export class ApiError extends Error {
   }
 }
 
+function messageFromUnknown(value: unknown) {
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "string") return value;
+  return "";
+}
+
 export async function normalizeApiError(response: Response) {
   let payload: ApiErrorPayload | undefined;
   let message = fallbackMessages[response.status] ?? `Erro ${response.status} ao chamar API.`;
 
   try {
     payload = (await response.json()) as ApiErrorPayload;
-    if (Array.isArray(payload.message)) message = payload.message.join(", ");
-    if (typeof payload.message === "string") message = payload.message;
-    if (!payload.message && payload.error) message = payload.error;
+    const directMessage = messageFromUnknown(payload.message);
+    const details = payload.details;
+    const detailsMessage =
+      typeof details === "string" ? details : messageFromUnknown(details?.message);
+
+    if (directMessage) message = directMessage;
+    else if (detailsMessage) message = detailsMessage;
+    else if (typeof details !== "string" && details?.error) message = details.error;
+    else if (payload.error) message = payload.error;
   } catch {
     const text = await response.text();
     if (text) message = text;

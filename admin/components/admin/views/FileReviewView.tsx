@@ -49,6 +49,7 @@ const statusVariant: Record<AdminFileStatus, BadgeVariant> = {
 const contextLabels: Record<AdminFileContext, string> = {
   AVATAR: "Avatar",
   BLOG_COVER: "Blog",
+  BLOG_HERO: "Blog hero",
   CONTACT_ATTACHMENT: "Contato",
   SUPPORT_ATTACHMENT: "Suporte",
   CLIENT_FILE: "Arquivo do cliente",
@@ -57,6 +58,23 @@ const contextLabels: Record<AdminFileContext, string> = {
   FINANCE_RECEIPT: "Financeiro",
   PREVIEW_ASSET: "Preview",
 };
+
+const riskLabels: Record<AdminFileAsset["riskLevel"], string> = {
+  SAFE_PREVIEW: "Visualizacao segura",
+  DOWNLOAD_ONLY: "Download",
+  HIGH_RISK_DOWNLOAD_ONLY: "Download protegido",
+};
+
+const downloadModeLabels: Record<AdminFileAsset["downloadMode"], string> = {
+  INLINE_ALLOWED: "Preview permitido",
+  ATTACHMENT_ONLY: "Apenas anexo",
+};
+
+function riskVariant(riskLevel: AdminFileAsset["riskLevel"]) {
+  if (riskLevel === "HIGH_RISK_DOWNLOAD_ONLY") return "yellow";
+  if (riskLevel === "SAFE_PREVIEW") return "green";
+  return "gray";
+}
 
 const originLabels: Record<AdminFileOrigin, string> = {
   CLIENT: "Cliente",
@@ -98,6 +116,7 @@ export function FileReviewView() {
   const [rejecting, setRejecting] = useState<AdminFileAsset | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminFileAsset | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
@@ -206,12 +225,29 @@ export function FileReviewView() {
   async function deleteFile() {
     if (!deleteTarget) return;
 
-    if (source !== "mock") await deleteAdminFile(deleteTarget.id);
-    setFiles((current) =>
-      current.map((item) => (item.id === deleteTarget.id ? { ...item, status: "DELETED", deletedAt: new Date().toISOString() } : item)),
-    );
-    setNotice(source === "mock" ? "Arquivo excluido somente no fallback mockado." : "Arquivo marcado como deletado.");
-    setDeleteTarget(null);
+    setDeleting(true);
+    setError("");
+    try {
+      const deletedFile = source !== "mock" ? await deleteAdminFile(deleteTarget.id) : null;
+      setFiles((current) =>
+        current.map((item) =>
+          item.id === deleteTarget.id
+            ? {
+                ...item,
+                ...(deletedFile ?? {}),
+                status: "DELETED",
+                deletedAt: deletedFile?.deletedAt ?? new Date().toISOString(),
+              }
+            : item,
+        ),
+      );
+      setNotice(source === "mock" ? "Arquivo excluido somente no fallback mockado." : "Arquivo removido da Ateliux e do Cloudinary.");
+      setDeleteTarget(null);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Nao foi possivel excluir o arquivo no Cloudinary.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function copyId(file: AdminFileAsset) {
@@ -272,6 +308,7 @@ export function FileReviewView() {
                   <th className="p-4">Contexto</th>
                   <th className="p-4">Origem</th>
                   <th className="p-4">MIME</th>
+                  <th className="p-4">Risco</th>
                   <th className="p-4">Tamanho</th>
                   <th className="p-4">Status</th>
                   <th className="p-4">Envio</th>
@@ -287,6 +324,7 @@ export function FileReviewView() {
                     <td className="p-4 text-sm text-gray-600">{contextLabels[file.context]}</td>
                     <td className="p-4 text-sm text-gray-600">{originLabels[file.origin]}</td>
                     <td className="p-4 text-xs text-gray-500">{file.mimeType}<br />{file.detectedMime ?? "Nao detectado"}</td>
+                    <td className="p-4"><Badge variant={riskVariant(file.riskLevel)}>{riskLabels[file.riskLevel]}</Badge></td>
                     <td className="p-4 text-sm text-gray-500">{formatBytes(file.size)}</td>
                     <td className="p-4"><Badge variant={statusVariant[file.status]}>{statusLabels[file.status]}</Badge></td>
                     <td className="p-4 text-sm text-gray-500">{new Date(file.createdAt).toLocaleDateString("pt-BR")}</td>
@@ -321,11 +359,14 @@ export function FileReviewView() {
               ["Origem", originLabels[details.origin]],
               ["MIME informado", details.mimeType],
               ["MIME detectado", details.detectedMime ?? "Nao detectado"],
+              ["Risco", riskLabels[details.riskLevel]],
+              ["Modo de download", downloadModeLabels[details.downloadMode]],
               ["Extensao", details.extension],
               ["Tamanho", formatBytes(details.size)],
               ["Status", statusLabels[details.status]],
               ["Scan", details.scanStatus ?? "NOT_SCANNED"],
               ["Cloudinary public id", details.cloudinaryPublicId ?? "Nao informado"],
+              ["Cloudinary resource type", details.cloudinaryResourceType ?? "Inferido pelo backend"],
               ["Enviado por", details.uploadedBy?.name ?? details.uploadedByType ?? "Nao informado"],
               ["Motivo de rejeicao", details.rejectionReason ?? "-"],
             ].map(([label, value]) => (
@@ -355,12 +396,14 @@ export function FileReviewView() {
         </div>
       </Modal>
 
-      <Modal isOpen={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} title="Confirmar exclusao">
+      <Modal isOpen={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} title="Confirmar exclusao" description="Este arquivo sera removido da Ateliux e tambem do armazenamento Cloudinary. Essa acao nao libera o arquivo para o cliente e nao podera ser desfeita.">
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">Este arquivo sera marcado como deletado e o backend tentara remover o asset da Cloudinary.</p>
+          <p className="text-sm text-gray-600">
+            Confirma a exclusao de <strong>{deleteTarget?.originalName}</strong>? Se o Cloudinary falhar, o arquivo continuara ativo para nova tentativa.
+          </p>
           <div className="flex justify-end gap-3">
-            <AdminButton variant="secondary" onClick={() => setDeleteTarget(null)}>Cancelar</AdminButton>
-            <AdminButton variant="danger" onClick={deleteFile}>Excluir arquivo</AdminButton>
+            <AdminButton variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancelar</AdminButton>
+            <AdminButton variant="danger" onClick={deleteFile} disabled={deleting}>{deleting ? "Excluindo..." : "Excluir arquivo"}</AdminButton>
           </div>
         </div>
       </Modal>

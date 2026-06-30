@@ -34,6 +34,10 @@ export class CacheService implements OnModuleDestroy {
     await this.redis.del(key);
   }
 
+  async ping(): Promise<string> {
+    return this.redis.ping();
+  }
+
   async remember<T>(key: string, ttlSeconds: number, loader: () => Promise<T>): Promise<T> {
     const cached = await this.get<T>(key);
     if (cached) return cached;

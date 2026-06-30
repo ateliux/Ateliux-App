@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, GoneException, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AdminRole } from '@prisma/client';
 import { AdminAuthGuard } from '../auth/guards/admin-auth.guard';
@@ -8,7 +8,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { IdParamDto } from '../common/dto/id-param.dto';
 import { RolesGuard } from '../common/guards/roles.guard';
 import type { RequestUser } from '../common/utils/request-user';
-import { CreateProjectDto } from './dto/create-project.dto';
+import { CreateProjectFullSetupDto } from './dto/create-project-full-setup.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectsService } from './projects.service';
 
@@ -44,6 +44,13 @@ export class ProjectsController {
   }
 
   @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.ADMIN, AdminRole.PROJECT_MANAGER, AdminRole.DESIGNER_DEV, AdminRole.FINANCE, AdminRole.SUPPORT)
+  @Get('admin/projects/:id/overview')
+  findAdminOverview(@CurrentUser() user: RequestUser, @Param() params: IdParamDto) {
+    return this.projects.findAdminOverview(params.id, user);
+  }
+
+  @UseGuards(AdminAuthGuard, RolesGuard)
   @Roles(AdminRole.ADMIN, AdminRole.PROJECT_MANAGER)
   @Get('admin/projects/:id')
   findAdminOne(@Param() params: IdParamDto) {
@@ -52,16 +59,23 @@ export class ProjectsController {
 
   @UseGuards(AdminAuthGuard, RolesGuard)
   @Roles(AdminRole.ADMIN, AdminRole.PROJECT_MANAGER)
+  @Post('admin/projects/full-setup')
+  createFullSetup(@CurrentUser() user: RequestUser, @Body() dto: CreateProjectFullSetupDto) {
+    return this.projects.createFullSetup(user, dto);
+  }
+
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.ADMIN, AdminRole.PROJECT_MANAGER)
   @Post('admin/projects')
-  create(@Body() dto: CreateProjectDto) {
-    return this.projects.create(dto);
+  create() {
+    throw new GoneException('Este endpoint foi substituido por /admin/projects/full-setup.');
   }
 
   @UseGuards(AdminAuthGuard, RolesGuard)
   @Roles(AdminRole.ADMIN, AdminRole.PROJECT_MANAGER)
   @Patch('admin/projects/:id')
-  update(@Param() params: IdParamDto, @Body() dto: UpdateProjectDto) {
-    return this.projects.update(params.id, dto);
+  update(@CurrentUser() user: RequestUser, @Param() params: IdParamDto, @Body() dto: UpdateProjectDto) {
+    return this.projects.update(params.id, dto, user);
   }
 
   @UseGuards(AdminAuthGuard, RolesGuard)

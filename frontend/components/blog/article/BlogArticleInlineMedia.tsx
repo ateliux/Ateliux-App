@@ -2,7 +2,7 @@ import type { BlogArticle } from "../../../content/blog";
 import { BlogArtwork } from "../BlogArtwork";
 
 type BlogArticleInlineMediaProps = {
-  media: BlogArticle["inlineMedia"];
+  media: NonNullable<BlogArticle["inlineMedia"]>;
 };
 
 export function BlogArticleInlineMedia({

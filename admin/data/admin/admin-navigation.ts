@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LineChart,
   MailCheck,
+  ShieldCheck,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -20,6 +21,7 @@ export const adminNavigation: readonly AdminNavigationItem[] = [
   { name: "Clientes", href: "/clientes", icon: KanbanSquare },
   { name: "Blog", href: "/blog", icon: BookOpen },
   { name: "Caixa de Entrada", href: "/dashboard?view=inbox", icon: Inbox },
+  { name: "LGPD", href: "/lgpd", icon: ShieldCheck },
   {
     name: "Portal do Cliente",
     href: "/portal-do-cliente/clientes",

@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, CheckCircle2, Download, FileText, MoreVertical, Paperclip, Plus, Search, Send, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Archive, CheckCircle2, Download, FileText, MoreVertical, Paperclip, Plus, Search, Send, ShieldAlert, SlidersHorizontal, Trash2, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ADMIN_INBOX_CONVERSATIONS, PORTAL_CLIENTS, PORTAL_PROJECTS_SCOPED } from "@/data/admin/admin-mock-data";
 import { canUseDevFallback } from "@/lib/env/is-dev-fallback-enabled";
@@ -14,10 +14,12 @@ import { LoadingState } from "@/components/admin/ui/LoadingState";
 import { Modal } from "@/components/admin/ui/Modal";
 import {
   deleteAdminInboxConversation,
+  getAdminInboxConversation,
   listAdminInboxConversations,
   sendAdminInboxMessage,
   updateAdminInboxConversation,
 } from "@/services/admin-inbox.service";
+import { approveAdminFile, deleteAdminFile, getAdminFileSignedUrl, rejectAdminFile, type AdminFileAsset } from "@/services/admin-files.service";
 
 const channelTabs: readonly { id: AdminInboxChannel; label: string }[] = [
   { id: "clientes", label: "Clientes" },
@@ -69,21 +71,121 @@ const priorityVariant: Record<AdminInboxPriority, "green" | "yellow" | "red" | "
 
 const assignOptions = ["Mia Torres", "Olivia Mason", "Ethan Ray", "Lina Armand", "Jacob Yuan"];
 
+const attachmentStatusLabels: Record<AdminInboxAttachment["status"], string> = {
+  PENDING_REVIEW: "Aguardando revisao",
+  APPROVED: "Aprovado",
+  REJECTED: "Rejeitado",
+  DELETED: "Removido",
+};
+
+const attachmentRiskLabels: Record<AdminInboxAttachment["riskLevel"], string> = {
+  SAFE_PREVIEW: "Preview seguro",
+  DOWNLOAD_ONLY: "Download seguro",
+  HIGH_RISK_DOWNLOAD_ONLY: "Alto risco",
+};
+
+const attachmentDownloadModeLabels: Record<AdminInboxAttachment["downloadMode"], string> = {
+  INLINE_ALLOWED: "Abrir inline",
+  ATTACHMENT_ONLY: "Baixar como anexo",
+};
+
 function ConversationAvatar({ conversation, size = "h-10 w-10" }: { conversation: AdminInboxConversation; size?: string }) {
   return <Avatar src={conversation.clientAvatarUrl} name={conversation.clientName || conversation.clientCompany} size={size} alt={conversation.clientName || "Cliente"} />;
 }
 
-function AttachmentCard({ attachment }: { attachment: AdminInboxAttachment }) {
+function AttachmentCard({
+  attachment,
+  actionId,
+  onDownload,
+  onApprove,
+  onReject,
+  onDelete,
+}: {
+  attachment: AdminInboxAttachment;
+  actionId: string;
+  onDownload: (attachment: AdminInboxAttachment) => void;
+  onApprove: (attachment: AdminInboxAttachment) => void;
+  onReject: (attachment: AdminInboxAttachment) => void;
+  onDelete: (attachment: AdminInboxAttachment) => void;
+}) {
+  const isPending = attachment.status === "PENDING_REVIEW";
+  const isApproved = attachment.status === "APPROVED";
+  const isRejected = attachment.status === "REJECTED";
+  const downloading = actionId === `${attachment.id}:download`;
+  const approving = actionId === `${attachment.id}:approve`;
+  const deleting = actionId === `${attachment.id}:delete`;
+
   return (
-    <div className="inline-flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 text-red-500">
+    <div className="w-full rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:max-w-md">
+      <div className="flex items-start gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-700">
         <FileText className="h-5 w-5" />
       </div>
-      <div className="text-left">
-        <p className="text-sm font-semibold text-gray-800">{attachment.name}</p>
-        <p className="text-[10px] text-gray-500">{attachment.size}</p>
+      <div className="min-w-0 flex-1 text-left">
+        <p className="truncate text-sm font-semibold text-gray-900">{attachment.name}</p>
+        <p className="mt-1 text-[11px] text-gray-500">
+          {(attachment.extension ?? "arquivo").toUpperCase()} - {attachment.size}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <span className="rounded-full border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-600">{attachmentStatusLabels[attachment.status]}</span>
+          <span className="rounded-full border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-600">{attachmentRiskLabels[attachment.riskLevel]}</span>
+          <span className="rounded-full border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-600">{attachmentDownloadModeLabels[attachment.downloadMode]}</span>
+          <span className="rounded-full border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-600">{attachment.uploadedByType}</span>
+        </div>
       </div>
-      <Download className="ml-4 h-4 w-4 text-gray-400" />
+      </div>
+
+      {isPending ? <p className="mt-3 text-xs font-medium text-gray-500">Arquivo enviado pelo cliente aguardando revisao.</p> : null}
+      {isApproved ? <p className="mt-3 text-xs font-medium text-emerald-700">Arquivo aprovado e disponivel para o cliente.</p> : null}
+      {attachment.status === "DELETED" ? <p className="mt-3 text-xs font-medium text-gray-500">Arquivo removido pela equipe Ateliux.</p> : null}
+      {isRejected ? (
+        <p className="mt-3 text-xs font-medium text-red-600">
+          Arquivo rejeitado{attachment.rejectionReason ? `: ${attachment.rejectionReason}` : "."}
+        </p>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {!isRejected && attachment.status !== "DELETED" ? (
+          <button
+            type="button"
+            onClick={() => onDownload(attachment)}
+            disabled={Boolean(actionId)}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" /> {downloading ? "Gerando..." : isPending ? "Baixar para analise" : "Baixar"}
+          </button>
+        ) : null}
+        {isPending ? (
+          <>
+            <button
+              type="button"
+              onClick={() => onApprove(attachment)}
+              disabled={Boolean(actionId)}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#00B074] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#009662] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <CheckCircle2 className="h-4 w-4" /> {approving ? "Aprovando..." : "Aprovar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onReject(attachment)}
+              disabled={Boolean(actionId)}
+              className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <XCircle className="h-4 w-4" /> Rejeitar
+            </button>
+          </>
+        ) : null}
+        {attachment.status !== "DELETED" ? (
+          <button
+            type="button"
+            onClick={() => onDelete(attachment)}
+            disabled={Boolean(actionId)}
+            className="inline-flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" /> {deleting ? "Excluindo..." : "Excluir"}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -102,6 +204,10 @@ export function InboxView() {
   const [showActions, setShowActions] = useState(false);
   const [reply, setReply] = useState("");
   const [pendingAttachment, setPendingAttachment] = useState<AdminInboxAttachment | null>(null);
+  const [attachmentActionId, setAttachmentActionId] = useState("");
+  const [attachmentToReject, setAttachmentToReject] = useState<AdminInboxAttachment | null>(null);
+  const [attachmentToDelete, setAttachmentToDelete] = useState<AdminInboxAttachment | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   const [conversationToDelete, setConversationToDelete] = useState<AdminInboxConversation | null>(null);
 
   const loadConversations = useCallback(async () => {
@@ -164,6 +270,40 @@ export function InboxView() {
     }
   }
 
+  function replaceConversation(next: AdminInboxConversation) {
+    setConversations((current) => current.map((conversation) => (conversation.id === next.id ? next : conversation)));
+  }
+
+  function patchAttachment(file: AdminFileAsset) {
+    setConversations((current) =>
+      current.map((conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) => ({
+          ...message,
+          attachments: message.attachments?.map((attachment) =>
+            attachment.id === file.id
+              ? {
+                  ...attachment,
+                  name: file.originalName ?? file.name,
+                  originalName: file.originalName,
+                  extension: file.extension,
+                  mimeType: file.mimeType,
+                  sizeBytes: file.size,
+                  status: file.status,
+                  riskLevel: file.riskLevel,
+                  downloadMode: file.downloadMode,
+                  context: file.context,
+                  uploadedByType: file.uploadedByType ?? attachment.uploadedByType,
+                  origin: file.origin,
+                  rejectionReason: file.rejectionReason,
+                }
+              : attachment,
+          ),
+        })),
+      })),
+    );
+  }
+
   function selectChannel(channel: AdminInboxChannel) {
     setActiveChannel(channel);
     setStatusFilter("todos");
@@ -173,10 +313,18 @@ export function InboxView() {
     setActiveConversationId(firstConversation?.id ?? "");
   }
 
-  function selectConversation(conversation: AdminInboxConversation) {
+  async function selectConversation(conversation: AdminInboxConversation) {
     setActiveConversationId(conversation.id);
     setShowActions(false);
     if (conversation.unread) updateConversation(conversation.id, { unread: false });
+    if (source === "api") {
+      try {
+        const detail = await getAdminInboxConversation(conversation.id);
+        replaceConversation({ ...detail, unread: false });
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Nao foi possivel carregar os anexos da conversa.");
+      }
+    }
   }
 
   function createConversation() {
@@ -230,9 +378,115 @@ export function InboxView() {
     setPendingAttachment({
       id: `reply-attachment-${Date.now()}`,
       name: "anexo-ateliux.pdf",
+      originalName: "anexo-ateliux.pdf",
+      extension: ".pdf",
+      mimeType: "application/pdf",
       size: "420 KB",
-      type: "PDF",
+      sizeBytes: 420 * 1024,
+      status: "APPROVED",
+      riskLevel: "SAFE_PREVIEW",
+      downloadMode: "INLINE_ALLOWED",
+      context: "CLIENT_FILE",
+      uploadedByType: "ADMIN",
+      origin: "ATELIUX",
     });
+  }
+
+  async function downloadAttachment(attachment: AdminInboxAttachment) {
+    if (source !== "api") {
+      setNotice("Download real disponivel apenas com a API conectada.");
+      return;
+    }
+
+    setAttachmentActionId(`${attachment.id}:download`);
+    try {
+      const { url } = await getAdminFileSignedUrl(attachment.id);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Nao foi possivel gerar o link do arquivo.");
+    } finally {
+      setAttachmentActionId("");
+    }
+  }
+
+  async function approveAttachment(attachment: AdminInboxAttachment) {
+    if (source !== "api") {
+      setNotice("Aprovacao real disponivel apenas com a API conectada.");
+      return;
+    }
+
+    setAttachmentActionId(`${attachment.id}:approve`);
+    try {
+      const file = await approveAdminFile(attachment.id);
+      patchAttachment(file);
+      setNotice("Arquivo aprovado no chat e na revisao de arquivos.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Nao foi possivel aprovar o arquivo.");
+    } finally {
+      setAttachmentActionId("");
+    }
+  }
+
+  async function rejectAttachment() {
+    if (!attachmentToReject) return;
+    const reason = rejectionReason.trim();
+    if (!reason) {
+      setNotice("Informe o motivo da rejeicao.");
+      return;
+    }
+
+    setAttachmentActionId(`${attachmentToReject.id}:reject`);
+    try {
+      const file = await rejectAdminFile(attachmentToReject.id, reason);
+      patchAttachment(file);
+      setAttachmentToReject(null);
+      setRejectionReason("");
+      setNotice("Arquivo rejeitado no chat e na revisao de arquivos.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Nao foi possivel rejeitar o arquivo.");
+    } finally {
+      setAttachmentActionId("");
+    }
+  }
+
+  async function deleteAttachment() {
+    if (!attachmentToDelete) return;
+    if (source !== "api") {
+      patchAttachment({
+        ...attachmentToDelete,
+        originalName: attachmentToDelete.originalName ?? attachmentToDelete.name,
+        safeName: attachmentToDelete.name,
+        name: attachmentToDelete.name,
+        extension: attachmentToDelete.extension ?? "",
+        mimeType: attachmentToDelete.mimeType ?? "application/octet-stream",
+        size: attachmentToDelete.sizeBytes,
+        storageProvider: "mock-cloudinary",
+        storageKey: attachmentToDelete.id,
+        origin: "CLIENT",
+        visibility: "PRIVATE",
+        status: "DELETED",
+        riskLevel: attachmentToDelete.riskLevel,
+        downloadMode: attachmentToDelete.downloadMode,
+        context: "CLIENT_FILE",
+        createdAt: new Date().toISOString(),
+        deletedAt: new Date().toISOString(),
+      } as AdminFileAsset);
+      setAttachmentToDelete(null);
+      setNotice("Arquivo removido somente no fallback mockado.");
+      return;
+    }
+
+    setAttachmentActionId(`${attachmentToDelete.id}:delete`);
+    try {
+      const file = await deleteAdminFile(attachmentToDelete.id);
+      patchAttachment(file);
+      setAttachmentToDelete(null);
+      setNotice("Arquivo removido da Ateliux e do Cloudinary.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Nao foi possivel excluir o arquivo.");
+    } finally {
+      setAttachmentActionId("");
+    }
   }
 
   async function sendReply() {
@@ -361,7 +615,7 @@ export function InboxView() {
                 <button
                   type="button"
                   key={conversation.id}
-                  onClick={() => selectConversation(conversation)}
+                  onClick={() => void selectConversation(conversation)}
                   className={`flex w-full cursor-pointer gap-4 border-b border-gray-50 p-4 text-left transition-colors ${conversation.id === activeConversation?.id ? "bg-[#F4F7F6]" : "hover:bg-gray-50"}`}
                 >
                   <ConversationAvatar conversation={conversation} />
@@ -456,7 +710,20 @@ export function InboxView() {
                         <p className="text-sm leading-relaxed text-gray-700">{message.body}</p>
                         {message.attachments?.length ? (
                           <div className="mt-4 flex flex-wrap gap-3">
-                            {message.attachments.map((attachment) => <AttachmentCard key={attachment.id} attachment={attachment} />)}
+                            {message.attachments.map((attachment) => (
+                              <AttachmentCard
+                                key={attachment.id}
+                                attachment={attachment}
+                                actionId={attachmentActionId}
+                                onDownload={(item) => void downloadAttachment(item)}
+                                onApprove={(item) => void approveAttachment(item)}
+                                onReject={(item) => {
+                                  setAttachmentToReject(item);
+                                  setRejectionReason("");
+                                }}
+                                onDelete={(item) => setAttachmentToDelete(item)}
+                              />
+                            ))}
                           </div>
                         ) : null}
                       </div>
@@ -508,6 +775,81 @@ export function InboxView() {
             <div className="flex justify-end gap-3">
               <AdminButton variant="secondary" onClick={() => setConversationToDelete(null)}>Cancelar</AdminButton>
               <AdminButton variant="danger" onClick={deleteConversation}>Excluir</AdminButton>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(attachmentToReject)}
+        onClose={() => {
+          setAttachmentToReject(null);
+          setRejectionReason("");
+        }}
+        title="Rejeitar arquivo"
+        description="Informe o motivo para manter o historico claro para equipe e cliente."
+      >
+        {attachmentToReject ? (
+          <div className="space-y-5">
+            <div className="flex items-start gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-red-700">
+              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="text-sm font-bold">{attachmentToReject.name}</p>
+                <p className="text-xs">O arquivo ficara indisponivel para o cliente apos a rejeicao.</p>
+              </div>
+            </div>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">
+              Motivo da rejeicao
+              <textarea
+                rows={4}
+                value={rejectionReason}
+                onChange={(event) => setRejectionReason(event.target.value)}
+                placeholder="Ex.: arquivo ilegivel, formato incorreto ou conteudo nao corresponde ao pedido."
+                className="resize-none rounded-2xl border border-gray-200 p-4 text-sm font-normal text-gray-700 outline-none transition-colors focus:border-red-400"
+              />
+            </label>
+            <div className="flex justify-end gap-3">
+              <AdminButton
+                variant="secondary"
+                onClick={() => {
+                  setAttachmentToReject(null);
+                  setRejectionReason("");
+                }}
+              >
+                Cancelar
+              </AdminButton>
+              <AdminButton
+                variant="danger"
+                onClick={() => void rejectAttachment()}
+                disabled={attachmentActionId === `${attachmentToReject.id}:reject`}
+              >
+                {attachmentActionId === `${attachmentToReject.id}:reject` ? "Rejeitando..." : "Rejeitar arquivo"}
+              </AdminButton>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(attachmentToDelete)}
+        onClose={() => setAttachmentToDelete(null)}
+        title="Excluir arquivo"
+        description="Este arquivo sera removido da Ateliux e tambem do armazenamento Cloudinary."
+      >
+        {attachmentToDelete ? (
+          <div className="space-y-5">
+            <p className="text-sm text-gray-600">
+              Esta acao marca <strong>{attachmentToDelete.name}</strong> como removido no historico do chat e tenta excluir o asset fisico do Cloudinary. Ela nao pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-3">
+              <AdminButton variant="secondary" onClick={() => setAttachmentToDelete(null)}>Cancelar</AdminButton>
+              <AdminButton
+                variant="danger"
+                onClick={() => void deleteAttachment()}
+                disabled={attachmentActionId === `${attachmentToDelete.id}:delete`}
+              >
+                {attachmentActionId === `${attachmentToDelete.id}:delete` ? "Excluindo..." : "Excluir arquivo"}
+              </AdminButton>
             </div>
           </div>
         ) : null}

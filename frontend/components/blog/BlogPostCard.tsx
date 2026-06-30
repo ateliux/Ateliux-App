@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { BlogPost } from "../../content/blog";
 import { blogPostRoute } from "../../data/siteRoutes";
 import { BlogArtwork } from "./BlogArtwork";
+import { BlogImagePlaceholder } from "./BlogImagePlaceholder";
 import { MotionCard } from "../motion";
 
 type BlogPostCardProps = {
@@ -18,7 +19,18 @@ export function BlogPostCard({ post }: BlogPostCardProps) {
     >
       <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-white/[0.04] bg-[#121214] transition-colors duration-300 hover:border-white/10">
         <div className="relative h-[220px] w-full">
-          <BlogArtwork artwork={post.artwork} />
+          {post.coverUrl ? (
+            <img
+              src={post.coverUrl}
+              alt=""
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          ) : !post.id ? (
+            <BlogArtwork artwork={post.artwork} />
+          ) : (
+            <BlogImagePlaceholder />
+          )}
         </div>
 
         <div className="flex flex-1 flex-col p-7">
@@ -30,7 +42,7 @@ export function BlogPostCard({ post }: BlogPostCardProps) {
             {post.title}
           </h3>
 
-          <p className="text-sm leading-relaxed text-zinc-400">
+          <p className="line-clamp-2 text-sm leading-relaxed text-zinc-400">
             {post.description}
           </p>
         </div>

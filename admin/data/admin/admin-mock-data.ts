@@ -1,6 +1,7 @@
 import type {
   AdminBlogPost,
   AdminClient,
+  AdminInboxAttachment,
   AdminInboxConversation,
   AdminInboxPriority,
   AdminInboxStatus,
@@ -63,6 +64,33 @@ function statusFromSupportTicket(status: SupportTicket["status"]): AdminInboxSta
   };
 
   return statusMap[status];
+}
+
+function parseMockAttachmentSize(size: string) {
+  const value = Number.parseFloat(size.replace(",", "."));
+  if (!Number.isFinite(value)) return 0;
+  if (size.toLowerCase().includes("mb")) return Math.round(value * 1024 * 1024);
+  return Math.round(value * 1024);
+}
+
+function mockInboxAttachment(id: string, name: string, size: string): AdminInboxAttachment {
+  const extension = name.includes(".") ? `.${name.split(".").pop()}` : "";
+
+  return {
+    id,
+    name,
+    originalName: name,
+    extension,
+    mimeType: extension === ".pdf" ? "application/pdf" : extension === ".png" ? "image/png" : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg" : "application/octet-stream",
+    size,
+    sizeBytes: parseMockAttachmentSize(size),
+    status: "PENDING_REVIEW",
+    riskLevel: extension === ".pdf" || extension === ".png" || extension === ".jpg" || extension === ".jpeg" ? "SAFE_PREVIEW" : "DOWNLOAD_ONLY",
+    downloadMode: extension === ".pdf" || extension === ".png" || extension === ".jpg" || extension === ".jpeg" ? "INLINE_ALLOWED" : "ATTACHMENT_ONLY",
+    context: "CLIENT_FILE",
+    uploadedByType: "CLIENT",
+    origin: "CLIENT",
+  };
 }
 
 export const MOCK_USERS: readonly AdminUser[] = [
@@ -531,7 +559,7 @@ export const ADMIN_INBOX_CONVERSATIONS: readonly AdminInboxConversation[] = [
         body: "Gostei da vitrine, mas queria testar outra imagem no banner principal antes de aprovar o preview.",
         createdAt: "10:30",
         from: "cliente",
-        attachments: [{ id: "att-marima-1", name: "referencia-banner.jpg", size: "1.1 MB", type: "JPG" }],
+        attachments: [mockInboxAttachment("att-marima-1", "referencia-banner.jpg", "1.1 MB")],
       },
       {
         id: "msg-cli-home-2",
@@ -631,7 +659,7 @@ export const ADMIN_INBOX_CONVERSATIONS: readonly AdminInboxConversation[] = [
         body: "O link do preview abre, mas a pagina fica carregando. Testei em dois navegadores.",
         createdAt: "Ontem",
         from: "cliente",
-        attachments: [{ id: "att-preview-error", name: "erro-preview.png", size: "680 KB", type: "PNG" }],
+        attachments: [mockInboxAttachment("att-preview-error", "erro-preview.png", "680 KB")],
       },
       {
         id: "msg-sup-preview-2",
@@ -715,7 +743,7 @@ export const ADMIN_INBOX_CONVERSATIONS: readonly AdminInboxConversation[] = [
         body: message.text,
         createdAt: message.time,
         from: message.sender === "Ateliux" ? ("ateliux" as const) : ("cliente" as const),
-        attachments: index === 0 ? ticket.attachments?.map((attachment, attachmentIndex) => ({ id: `support-ticket-${ticket.id}-att-${attachmentIndex}`, name: attachment, size: "1.0 MB", type: "Arquivo" })) : undefined,
+        attachments: index === 0 ? ticket.attachments?.map((attachment, attachmentIndex) => mockInboxAttachment(`support-ticket-${ticket.id}-att-${attachmentIndex}`, attachment, "1.0 MB")) : undefined,
       })),
     };
   }),

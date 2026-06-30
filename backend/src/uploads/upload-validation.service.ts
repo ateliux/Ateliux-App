@@ -1,15 +1,31 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
-import { fromBuffer } from 'file-type';
+import type * as FileType from 'file-type';
 import { BLOCKED_UPLOAD_EXTENSIONS } from './blocked-extensions';
 import {
   UPLOAD_POLICIES,
   isUploadContext,
   type UploadContext,
+  type UploadActorPolicy,
   type UploadPolicy,
 } from './constants/upload-policy';
 import { buildSafeFileName, type SafeFileName } from './utils/safe-filename';
 
-export type UploadActorType = 'client' | 'admin' | 'public';
+type FileTypeModule = typeof FileType;
+type DetectedFileType = Awaited<ReturnType<FileTypeModule['fileTypeFromBuffer']>>;
+
+const importFileType = new Function('moduleName', 'return import(moduleName)') as (
+  moduleName: string,
+) => Promise<FileTypeModule>;
+
+let fileTypeModulePromise: Promise<FileTypeModule> | null = null;
+
+async function detectFileType(buffer: Buffer): Promise<DetectedFileType> {
+  fileTypeModulePromise ??= importFileType('file-type');
+  const fileType = await fileTypeModulePromise;
+  return fileType.fileTypeFromBuffer(buffer);
+}
+
+export type UploadActorType = 'CLIENT' | 'ADMIN' | 'PUBLIC' | 'SYSTEM';
 
 export type UploadValidationInput = {
   context: string;
@@ -23,7 +39,7 @@ export type ValidatedUpload = {
   policy: UploadPolicy;
   names: SafeFileName;
   providedMime: string;
-  detectedMime: string;
+  detectedMime: string | null;
 };
 
 @Injectable()
@@ -48,15 +64,17 @@ export class UploadValidationService {
 
     const context = input.context;
     const policy = UPLOAD_POLICIES[context];
+    const actorPolicy = this.resolveActorPolicy(policy, input.actorType);
     this.assertActorAllowed(policy, input.actorType);
 
     if (file.size <= 0) {
       throw new BadRequestException('Arquivo vazio.');
     }
 
-    if (file.size > policy.maxSizeBytes) {
+    const maxSizeBytes = this.resolveMaxSizeBytes(policy, input.actorType);
+    if (file.size > maxSizeBytes) {
       this.logger.warn(
-        `Upload rejected by size. context=${context} size=${file.size} max=${policy.maxSizeBytes}`,
+        `Upload rejected by size. context=${context} actorType=${input.actorType} size=${file.size} max=${maxSizeBytes}`,
       );
       throw new BadRequestException('Arquivo excede o limite permitido para este contexto.');
     }
@@ -70,57 +88,64 @@ export class UploadValidationService {
     }
 
     const names = buildSafeFileName(file.originalname);
-    this.assertExtension(names.extension, policy);
-    this.assertProvidedMime(file.mimetype, policy);
-    const detectedMime = await this.detectMime(file.buffer, names.extension, file.mimetype, policy);
-
-    if (!policy.allowedMimeTypes.includes(detectedMime)) {
-      this.logger.warn(
-        `Upload rejected by magic bytes. context=${context} extension=${names.extension} browserMime=${file.mimetype} detectedMime=${detectedMime}`,
-      );
-      throw new BadRequestException('Tipo real do arquivo nao permitido.');
-    }
+    const providedMime = normalizeProvidedMime(file.mimetype);
+    this.assertExtension(names.extension, actorPolicy);
+    this.assertProvidedMime(providedMime, actorPolicy);
+    const detectedMime = await this.detectMime(file.buffer, names.extension, providedMime, actorPolicy, context);
 
     return {
       context,
       policy,
       names,
-      providedMime: file.mimetype,
+      providedMime,
       detectedMime,
     };
   }
 
   private assertActorAllowed(policy: UploadPolicy, actorType: UploadActorType) {
-    if (actorType === 'client' && !policy.allowClientUpload) {
+    if (actorType === 'CLIENT' && !policy.allowClientUpload) {
       throw new ForbiddenException('Clientes nao podem enviar arquivo neste contexto.');
     }
 
-    if (actorType === 'admin' && !policy.allowAdminUpload) {
+    if (actorType === 'ADMIN' && !policy.allowAdminUpload) {
       throw new ForbiddenException('Admins nao podem enviar arquivo neste contexto.');
     }
 
-    if (actorType === 'public' && !policy.allowPublicUpload) {
+    if (actorType === 'PUBLIC' && !policy.allowPublicUpload) {
       throw new ForbiddenException('Upload publico nao permitido neste contexto.');
     }
   }
 
-  private assertExtension(extension: string, policy: UploadPolicy) {
+  private resolveActorPolicy(policy: UploadPolicy, actorType: UploadActorType) {
+    if (actorType === 'ADMIN' || actorType === 'SYSTEM') return policy.adminPolicy;
+    return policy.inboundPolicy;
+  }
+
+  private resolveMaxSizeBytes(policy: UploadPolicy, actorType: UploadActorType) {
+    if (actorType === 'ADMIN' || actorType === 'SYSTEM') return policy.adminMaxSizeBytes;
+    return policy.inboundMaxSizeBytes;
+  }
+
+  private assertExtension(extension: string, actorPolicy: UploadActorPolicy) {
     if (!extension) {
       throw new BadRequestException('Arquivo sem extensao.');
     }
 
-    if (BLOCKED_UPLOAD_EXTENSIONS.has(extension)) {
+    if (actorPolicy.blockKnownDangerousExtensions && BLOCKED_UPLOAD_EXTENSIONS.has(extension)) {
       this.logger.warn(`Upload rejected by blocked extension. extension=${extension}`);
       throw new BadRequestException('Extensao de arquivo bloqueada por seguranca.');
     }
 
-    if (!policy.allowedExtensions.includes(extension)) {
+    if (actorPolicy.allowedExtensions && !actorPolicy.allowedExtensions.includes(extension)) {
       throw new BadRequestException('Extensao nao permitida para este contexto.');
     }
   }
 
-  private assertProvidedMime(mimeType: string, policy: UploadPolicy) {
-    if (!mimeType || !policy.allowedMimeTypes.includes(mimeType)) {
+  private assertProvidedMime(mimeType: string, actorPolicy: UploadActorPolicy) {
+    if (
+      actorPolicy.mode === 'restricted' &&
+      (!mimeType || !actorPolicy.allowedMimeTypes?.includes(mimeType))
+    ) {
       throw new BadRequestException('MIME type informado nao permitido.');
     }
   }
@@ -129,20 +154,42 @@ export class UploadValidationService {
     buffer: Buffer,
     extension: string,
     providedMime: string,
-    policy: UploadPolicy,
+    actorPolicy: UploadActorPolicy,
+    context: UploadContext,
   ) {
-    const detected = await fromBuffer(buffer);
+    const detected = await detectFileType(buffer);
 
-    if (detected?.mime && policy.allowedMimeTypes.includes(detected.mime)) {
+    if (detected?.mime && this.isMimeAllowed(detected.mime, actorPolicy)) {
       return detected.mime;
     }
 
     const fallbackMime = this.detectControlledFallback(buffer, extension, providedMime, detected?.mime);
-    if (fallbackMime && policy.allowedMimeTypes.includes(fallbackMime)) {
+    if (fallbackMime && this.isMimeAllowed(fallbackMime, actorPolicy)) {
       return fallbackMime;
     }
 
+    if (detected?.mime && !this.isMimeAllowed(detected.mime, actorPolicy)) {
+      this.logger.warn(
+        `Upload rejected by detected MIME. context=${context} extension=${extension} browserMime=${providedMime} detectedMime=${detected.mime}`,
+      );
+      throw new BadRequestException('Tipo real do arquivo nao permitido.');
+    }
+
+    if (actorPolicy.mode === 'admin' && actorPolicy.allowUnknownDetectedMime) {
+      return detected?.mime ?? null;
+    }
+
+    if (actorPolicy.requireDetectedMime) {
+      this.logger.warn(
+        `Upload rejected by missing magic bytes. context=${context} extension=${extension} browserMime=${providedMime}`,
+      );
+    }
+
     throw new BadRequestException('Nao foi possivel validar o tipo real do arquivo.');
+  }
+
+  private isMimeAllowed(mimeType: string, actorPolicy: UploadActorPolicy) {
+    return !actorPolicy.allowedMimeTypes || actorPolicy.allowedMimeTypes.includes(mimeType);
   }
 
   private detectControlledFallback(
@@ -174,4 +221,12 @@ export class UploadValidationService {
 
     return null;
   }
+}
+
+function normalizeProvidedMime(mimeType: string | undefined) {
+  const normalized = (mimeType || 'application/octet-stream').trim().toLowerCase();
+  if (normalized === 'image/jpg' || normalized === 'image/pjpeg') return 'image/jpeg';
+  if (normalized === 'image/x-png') return 'image/png';
+  if (normalized === 'image/jfif') return 'image/jpeg';
+  return normalized;
 }

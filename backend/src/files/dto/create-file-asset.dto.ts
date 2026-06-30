@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   FileContext,
+  FileDownloadMode,
   FileOrigin,
+  FileRiskLevel,
   FileStatus,
   FileUploadedByType,
   FileVisibility,
@@ -98,4 +100,14 @@ export class CreateFileAssetDto {
   @IsOptional()
   @IsEnum(FileStatus)
   status?: FileStatus;
+
+  @ApiPropertyOptional({ enum: FileRiskLevel })
+  @IsOptional()
+  @IsEnum(FileRiskLevel)
+  riskLevel?: FileRiskLevel;
+
+  @ApiPropertyOptional({ enum: FileDownloadMode })
+  @IsOptional()
+  @IsEnum(FileDownloadMode)
+  downloadMode?: FileDownloadMode;
 }

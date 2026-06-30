@@ -1,6 +1,8 @@
 import { apiRequest } from "@/lib/api/client";
 
 export type FileAssetStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DELETED";
+export type FileRiskLevel = "SAFE_PREVIEW" | "DOWNLOAD_ONLY" | "HIGH_RISK_DOWNLOAD_ONLY";
+export type FileDownloadMode = "INLINE_ALLOWED" | "ATTACHMENT_ONLY";
 
 export type FileAssetDto = {
   id: string;
@@ -16,6 +18,8 @@ export type FileAssetDto = {
   context: string;
   origin: "CLIENT" | "ATELIUX" | "PUBLIC" | "SYSTEM";
   status: FileAssetStatus;
+  riskLevel: FileRiskLevel;
+  downloadMode: FileDownloadMode;
   rejectionReason?: string | null;
   createdAt: string;
 };

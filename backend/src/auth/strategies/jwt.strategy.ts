@@ -18,7 +18,31 @@ type JwtPayload = {
 
 function extractJwtFromCookie(request: Request): string | null {
   const cookies = request.cookies as Record<string, string | undefined> | undefined;
-  return cookies?.[AUTH_COOKIE_NAMES.access] ?? null;
+  if (!cookies) return null;
+
+  const requestedScope = request.get('x-ateliux-auth-scope');
+  if (requestedScope === 'admin') {
+    return cookies[AUTH_COOKIE_NAMES.admin.access] ?? cookies[AUTH_COOKIE_NAMES.legacy.access] ?? null;
+  }
+  if (requestedScope === 'client') {
+    return cookies[AUTH_COOKIE_NAMES.client.access] ?? cookies[AUTH_COOKIE_NAMES.legacy.access] ?? null;
+  }
+
+  const path = request.originalUrl ?? request.url ?? '';
+  if (path.includes('/auth/admin') || path.includes('/admin/')) {
+    return cookies[AUTH_COOKIE_NAMES.admin.access] ?? cookies[AUTH_COOKIE_NAMES.legacy.access] ?? null;
+  }
+
+  if (path.includes('/auth/client') || path.includes('/client/')) {
+    return cookies[AUTH_COOKIE_NAMES.client.access] ?? cookies[AUTH_COOKIE_NAMES.legacy.access] ?? null;
+  }
+
+  return (
+    cookies[AUTH_COOKIE_NAMES.admin.access] ??
+    cookies[AUTH_COOKIE_NAMES.client.access] ??
+    cookies[AUTH_COOKIE_NAMES.legacy.access] ??
+    null
+  );
 }
 
 @Injectable()

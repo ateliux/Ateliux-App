@@ -33,6 +33,11 @@ export type ClientRegisterInput = ClientLoginInput & {
   company: string;
   phone?: string;
   plan?: string;
+  acceptTerms: boolean;
+  acceptPrivacy: boolean;
+  marketingOptIn?: boolean;
+  termsVersion?: string;
+  privacyVersion?: string;
 };
 
 export function loginClient(input: ClientLoginInput) {

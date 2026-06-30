@@ -8,12 +8,14 @@ export type BlogArtworkName =
   | "lines";
 
 export type BlogPost = {
+  id?: string;
   slug: string;
   tag: string;
   date: string;
   title: string;
   description: string;
   artwork: BlogArtworkName;
+  coverUrl?: string;
 };
 
 export type BlogArticleSection = {
@@ -42,16 +44,18 @@ export type BlogArticle = BlogPost & {
   readTime: string;
   shares: number;
   comments: number;
-  heroImage: string;
+  heroImage?: string;
   heroAlt: string;
   body: readonly BlogArticleSection[];
   sideNote: {
     eyebrow: string;
     title: string;
     description: string;
+    ctaLabel?: string;
+    ctaHref?: string;
   };
   relatedItems: readonly BlogArticleRelatedItem[];
-  inlineMedia: {
+  inlineMedia?: {
     artwork: BlogArtworkName;
     title: string;
     caption: string;
@@ -86,17 +90,22 @@ export const blogContent = {
     links: [
       {
         label: "X",
-        href: "#x",
+        href: "https://x.com/ateliux",
         icon: "x",
       },
       {
         label: "Instagram",
-        href: "#instagram",
+        href: "https://www.instagram.com/ateliux/",
         icon: "instagram",
       },
       {
+        label: "Facebook",
+        href: "https://www.facebook.com/profile.php?id=61586258123612",
+        icon: "facebook",
+      },
+      {
         label: "LinkedIn",
-        href: "#linkedin",
+        href: "https://www.linkedin.com/in/ateliux-company/",
         icon: "linkedin",
       },
     ],

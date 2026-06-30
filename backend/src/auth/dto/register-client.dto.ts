@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class RegisterClientDto {
   @ApiProperty({ example: 'Marina Costa' })
@@ -30,4 +30,27 @@ export class RegisterClientDto {
   @IsOptional()
   @IsString()
   plan?: string;
+
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  acceptTerms!: boolean;
+
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  acceptPrivacy!: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  marketingOptIn?: boolean;
+
+  @ApiPropertyOptional({ example: '2026-06-terms-v1' })
+  @IsOptional()
+  @IsString()
+  termsVersion?: string;
+
+  @ApiPropertyOptional({ example: '2026-06-privacy-v1' })
+  @IsOptional()
+  @IsString()
+  privacyVersion?: string;
 }

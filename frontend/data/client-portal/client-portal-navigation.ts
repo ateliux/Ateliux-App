@@ -1,5 +1,6 @@
 import {
   BadgeDollarSign,
+  Bookmark,
   CalendarDays,
   CheckSquare,
   Clock3,
@@ -22,6 +23,7 @@ export const clientPortalNavigation: ClientPortalNavItem[] = [
   { label: "Aprovacoes", href: "/cliente/aprovacoes", icon: CheckSquare },
   { label: "Solicitacoes", href: "/cliente/solicitacoes", icon: Send },
   { label: "Arquivos", href: "/cliente/arquivos", icon: FileStack },
+  { label: "Artigos salvos", href: "/cliente/artigos-salvos", icon: Bookmark },
   { label: "Previa", href: "/cliente/previa", icon: MonitorPlay },
   { label: "Cronograma", href: "/cliente/cronograma", icon: CalendarDays },
   { label: "Suporte", href: "/cliente/suporte", icon: LifeBuoy },
@@ -33,6 +35,7 @@ export const clientPortalNavigation: ClientPortalNavItem[] = [
 export const clientPortalQuickLinks = [
   { label: "Aprovacoes", href: "/cliente/aprovacoes", icon: CheckSquare },
   { label: "Arquivos", href: "/cliente/arquivos", icon: FileStack },
+  { label: "Artigos salvos", href: "/cliente/artigos-salvos", icon: Bookmark },
   { label: "Cronograma", href: "/cliente/cronograma", icon: Clock3 },
   { label: "Suporte", href: "/cliente/suporte", icon: LifeBuoy },
 ] as const;

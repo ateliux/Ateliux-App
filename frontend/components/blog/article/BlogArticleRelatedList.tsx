@@ -29,7 +29,7 @@ export function BlogArticleRelatedList({
               <h3 className="text-sm font-medium leading-5 text-zinc-200">
                 {item.title}
               </h3>
-              <p className="mt-2 text-xs leading-5 text-zinc-500">
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-500">
                 {item.description}
               </p>
             </Link>

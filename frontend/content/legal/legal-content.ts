@@ -5,109 +5,208 @@ export type LegalSection = {
 };
 
 export type LegalPageContent = {
-  id: "terms" | "privacy";
+  id: "terms" | "portalTerms" | "privacy" | "cookies" | "lgpd";
   title: string;
+  updatedAt: string;
   sections: readonly LegalSection[];
 };
+
+const legalReviewNotice =
+  "Este documento e uma base tecnica e informativa. Ele deve ser revisado por assessoria juridica antes de uso como documento legal definitivo.";
 
 export const legalContent = {
   terms: {
     id: "terms",
-    title: "Termos e Condições",
+    title: "Termos de Uso",
+    updatedAt: "29 de junho de 2026",
     sections: [
       {
-        title: "Visão geral",
+        title: "Visao geral",
         paragraphs: [
-          "Estes Termos e Condições regulam o uso dos serviços, propostas, páginas, sistemas, plataformas e produtos digitais desenvolvidos ou disponibilizados pela Ateliux.",
-          "Ao contratar, acessar ou utilizar qualquer solução criada pela Ateliux, você declara estar ciente das condições descritas neste documento e concorda em utilizar nossos serviços de forma ética, legal e alinhada ao escopo acordado.",
-          "A Ateliux atua na criação de sites, landing pages, e-commerce, SaaS, dashboards, automações, sistemas internos e ecossistemas digitais sob medida. Cada entrega pode variar conforme briefing, contrato, proposta comercial e nível de complexidade do projeto.",
+          "Estes Termos de Uso regulam o acesso ao site, formularios, conteudos, materiais e canais digitais da Ateliux.",
+          "A Ateliux desenvolve sites, landing pages, e-commerce, SaaS, dashboards, automacoes, portais e sistemas sob medida conforme proposta, contrato e escopo aprovado.",
+        ],
+        notice: [legalReviewNotice],
+      },
+      {
+        title: "Uso permitido",
+        paragraphs: [
+          "Voce deve utilizar os canais da Ateliux de forma licita, etica e compatvel com as finalidades apresentadas.",
+          "Nao e permitido tentar acessar areas restritas, explorar falhas, interferir na seguranca, enviar conteudo malicioso ou utilizar os servicos para violar direitos de terceiros.",
         ],
       },
       {
-        title: "Escopo dos serviços",
+        title: "Propostas, escopo e entregas",
         paragraphs: [
-          "Os serviços prestados pela Ateliux são definidos com base no diagnóstico inicial, nas necessidades do cliente e no escopo aprovado antes do início da execução.",
-          "Alterações que não estejam previstas no escopo inicial poderão exigir revisão de prazo, orçamento, prioridades e etapas de entrega.",
-          "A Ateliux poderá sugerir melhorias técnicas, visuais e estratégicas durante o processo, sempre buscando entregar uma solução mais clara, funcional e preparada para evolução.",
+          "Prazos, valores, etapas, entregaveis, revisoes e responsabilidades sao definidos em proposta comercial, contrato ou acordo formal entre as partes.",
+          "Mudancas fora do escopo aprovado podem exigir nova avaliacao de prazo, orcamento, prioridades e responsabilidades.",
         ],
       },
       {
         title: "Responsabilidades do cliente",
         paragraphs: [
-          "O cliente é responsável por fornecer informações, conteúdos, acessos, referências, imagens, textos, credenciais e aprovações necessárias para o andamento do projeto.",
-          "Atrasos no envio de materiais, aprovações ou respostas podem impactar diretamente o cronograma de entrega.",
-        ],
-        notice: [
-          "O cliente não deve enviar materiais, textos, imagens, marcas ou dados que não possua autorização para utilizar.",
-          "A Ateliux não se responsabiliza por conteúdos fornecidos pelo cliente que violem direitos de terceiros, leis aplicáveis ou políticas de plataformas externas.",
+          "O cliente e responsavel por fornecer informacoes corretas, materiais, textos, imagens, acessos, aprovacoes e autorizacoes necessarias para a execucao do projeto.",
+          "O cliente nao deve enviar dados, marcas, imagens, textos ou arquivos que nao esteja autorizado a utilizar.",
         ],
       },
       {
-        title: "Pagamentos, prazos e entregas",
+        title: "Limitacoes",
         paragraphs: [
-          "Os valores, formas de pagamento, etapas e prazos serão definidos em proposta comercial, contrato ou acordo formal entre as partes.",
-          "As entregas podem ocorrer por etapas, como briefing, design, desenvolvimento, revisão, testes, publicação e suporte inicial.",
-          "Projetos sob medida podem depender de serviços externos, como hospedagem, domínio, APIs, gateways de pagamento, provedores de e-mail, bancos de dados e plataformas de terceiros.",
+          "Ferramentas externas, hospedagem, APIs, plataformas de pagamento, provedores de e-mail e servicos de terceiros podem possuir termos e indisponibilidades proprios.",
+          "A Ateliux busca aplicar boas praticas tecnicas, mas nenhum sistema digital e totalmente imune a falhas, riscos operacionais ou indisponibilidades externas.",
+        ],
+      },
+    ],
+  },
+  portalTerms: {
+    id: "portalTerms",
+    title: "Termos do Portal do Cliente",
+    updatedAt: "29 de junho de 2026",
+    sections: [
+      {
+        title: "Finalidade do portal",
+        paragraphs: [
+          "O Portal do Cliente e uma area autenticada para acompanhamento de projetos, etapas, briefings, aprovacoes, solicitacoes, arquivos, cronograma, suporte e financeiro.",
+          "O uso do portal deve respeitar o escopo contratado, a seguranca da conta e as regras de confidencialidade aplicaveis ao projeto.",
+        ],
+        notice: [legalReviewNotice],
+      },
+      {
+        title: "Conta e acesso",
+        paragraphs: [
+          "O usuario deve proteger credenciais, nao compartilhar senha e avisar a Ateliux se identificar uso indevido ou acesso nao autorizado.",
+          "A Ateliux pode bloquear ou revisar acessos em caso de risco de seguranca, suspeita de fraude, uso indevido ou encerramento da relacao contratual.",
         ],
       },
       {
-        title: "Uso das soluções entregues",
+        title: "Arquivos e aprovacoes",
         paragraphs: [
-          "Após a conclusão e quitação do projeto, o cliente poderá utilizar a solução conforme os termos acordados, respeitando licenças, dependências, bibliotecas, integrações e eventuais limitações técnicas.",
-          "A Ateliux poderá manter registros internos, referências técnicas e aprendizados do projeto para fins de suporte, melhoria de processos e portfólio, desde que não exponha dados sigilosos do cliente sem autorização.",
+          "Arquivos enviados pelo cliente podem passar por verificacao tecnica antes de ficarem disponiveis para download ou uso no projeto.",
+          "Aprovacoes, solicitacoes de ajuste e respostas enviadas no portal podem ser registradas para historico operacional, auditoria e continuidade do projeto.",
+        ],
+      },
+      {
+        title: "Dados do projeto",
+        paragraphs: [
+          "Informacoes do portal devem ser usadas apenas para acompanhamento do projeto e comunicacao entre cliente e equipe Ateliux.",
+          "Dados, arquivos e materiais do projeto podem ser mantidos enquanto forem necessarios para execucao, suporte, obrigacoes legais, historico e seguranca.",
         ],
       },
     ],
   },
   privacy: {
     id: "privacy",
-    title: "Política de Privacidade",
+    title: "Politica de Privacidade",
+    updatedAt: "29 de junho de 2026",
     sections: [
       {
-        title: "Visão geral",
+        title: "Visao geral",
         paragraphs: [
-          "Esta Política de Privacidade explica como a Ateliux coleta, utiliza, armazena e protege informações relacionadas aos visitantes do site, clientes, leads, usuários e pessoas que entram em contato com nossos canais digitais.",
-          "Nosso objetivo é utilizar dados de forma responsável, transparente e limitada ao necessário para comunicação, atendimento, execução de projetos e melhoria dos nossos serviços.",
-          "Ao utilizar nossos formulários, páginas, canais de contato ou serviços, você concorda com as práticas descritas nesta política.",
+          "Esta Politica de Privacidade explica como a Ateliux coleta, utiliza, armazena e protege dados pessoais em seu site publico, blog, formularios, area de suporte, Portal do Cliente e dashboard administrativa.",
+          "A Ateliux trata dados para atendimento comercial, execucao de projetos, suporte, comunicacao, seguranca, auditoria, cumprimento de obrigacoes e melhoria dos servicos.",
+        ],
+        notice: [legalReviewNotice],
+      },
+      {
+        title: "Dados coletados",
+        paragraphs: [
+          "Podemos coletar nome, e-mail, telefone, empresa, cargo, mensagem, tipo de projeto, orcamento, prazo, site atual, anexos, preferencias de comunicacao, dados de login, registros de suporte e informacoes enviadas no Portal do Cliente.",
+          "Tambem podemos registrar dados tecnicos como IP, User-Agent, cookies de sessao, logs de seguranca, historico de acoes, status de arquivos e dados de auditoria.",
         ],
       },
       {
-        title: "Dados que podemos coletar",
+        title: "Finalidades de tratamento",
         paragraphs: [
-          "Podemos coletar informações fornecidas diretamente por você, como nome, e-mail, telefone, empresa, cargo, mensagem enviada, tipo de projeto desejado e demais informações necessárias para atendimento comercial ou execução do serviço.",
-          "Também podemos coletar informações técnicas básicas, como endereço IP, navegador, dispositivo, páginas acessadas, origem de tráfego e interações no site, quando ferramentas de análise estiverem configuradas.",
+          "Os dados podem ser usados para responder contatos, preparar propostas, executar projetos, liberar acesso ao portal, manter sessao autenticada, processar uploads, responder suporte, enviar notificacoes e registrar aprovacoes.",
+          "Com seu consentimento, dados tambem podem ser utilizados para newsletter, comunicacoes comerciais, analise de uso e mensuracao de campanhas.",
         ],
       },
       {
-        title: "Como utilizamos os dados",
+        title: "Compartilhamento",
         paragraphs: [
-          "Utilizamos os dados para responder solicitações, preparar propostas, entender necessidades do projeto, prestar suporte, organizar etapas de desenvolvimento e melhorar a experiência dos usuários em nossos canais digitais.",
-          "Também podemos utilizar informações de contato para enviar atualizações, materiais, comunicações comerciais ou conteúdos relacionados a software, design, automação, e-commerce, SaaS e produtos digitais.",
+          "A Ateliux nao vende dados pessoais. O compartilhamento pode ocorrer com provedores tecnicos necessarios, como hospedagem, banco de dados, storage, e-mail, filas, analytics, seguranca e ferramentas de suporte.",
+          "Tambem pode haver compartilhamento quando exigido por lei, autoridade competente, cumprimento contratual ou protecao de direitos.",
         ],
       },
       {
-        title: "Compartilhamento de informações",
+        title: "Seguranca e retencao",
         paragraphs: [
-          "A Ateliux não vende dados pessoais. Informações podem ser compartilhadas apenas quando necessário para execução dos serviços, cumprimento de obrigações legais, proteção de direitos ou integração com ferramentas essenciais ao projeto.",
-          "Essas ferramentas podem incluir provedores de hospedagem, serviços de e-mail, plataformas de analytics, bancos de dados, sistemas de pagamento, APIs e outras tecnologias necessárias para a operação do projeto.",
-        ],
-      },
-      {
-        title: "Segurança e retenção",
-        paragraphs: [
-          "Adotamos medidas técnicas e organizacionais para proteger informações contra acesso não autorizado, perda, alteração ou uso indevido.",
-          "Os dados são mantidos pelo tempo necessário para cumprir as finalidades descritas nesta política, obrigações legais, contratos, suporte, histórico comercial e melhoria dos serviços.",
-        ],
-        notice: [
-          "Nenhum sistema é completamente imune a riscos, mas buscamos aplicar boas práticas de segurança em nossos processos e projetos.",
-          "O cliente também deve proteger credenciais, acessos administrativos, senhas e informações sensíveis fornecidas durante o projeto.",
+          "Aplicamos medidas tecnicas e organizacionais para reduzir riscos de acesso indevido, perda, alteracao, vazamento ou uso nao autorizado.",
+          "Dados sao mantidos pelo tempo necessario para cumprir as finalidades informadas, contratos, obrigacoes legais, auditoria, defesa de direitos, suporte e continuidade operacional.",
         ],
       },
       {
         title: "Direitos do titular",
         paragraphs: [
-          "Você pode solicitar acesso, correção, atualização ou exclusão dos seus dados pessoais, quando aplicável, entrando em contato pelos canais oficiais da Ateliux.",
-          "Também é possível solicitar a interrupção de comunicações comerciais, respeitando eventuais obrigações legais ou contratuais que exijam a manutenção de determinadas informações.",
+          "Voce pode solicitar acesso, confirmacao de tratamento, correcao, portabilidade, eliminacao, informacao sobre compartilhamento ou revogacao de consentimento quando aplicavel.",
+          "Solicitacoes podem ser feitas pela pagina LGPD. A Ateliux podera solicitar informacoes adicionais para validar identidade e proteger dados de terceiros.",
+        ],
+      },
+    ],
+  },
+  cookies: {
+    id: "cookies",
+    title: "Politica de Cookies",
+    updatedAt: "29 de junho de 2026",
+    sections: [
+      {
+        title: "O que sao cookies",
+        paragraphs: [
+          "Cookies sao pequenos registros armazenados no navegador para manter funcionamento, seguranca, preferencias, analise de uso e, quando autorizado, mensuracao de campanhas.",
+          "A Ateliux utiliza cookies necessarios por padrao e solicita consentimento para categorias nao essenciais.",
+        ],
+        notice: [legalReviewNotice],
+      },
+      {
+        title: "Categorias utilizadas",
+        paragraphs: [
+          "Necessarios: mantem login, seguranca, cookies httpOnly de autenticacao, protecao de sessao e funcionamento basico.",
+          "Preferencias: guardam escolhas de experiencia, como consentimento de cookies e configuracoes de interface.",
+          "Analiticos: ajudam a entender uso agregado do site e desempenho de paginas, quando ferramentas de analytics forem configuradas.",
+          "Marketing: permitem mensuracao de campanhas e comunicacoes comerciais, quando houver integracoes configuradas e consentimento valido.",
+        ],
+      },
+      {
+        title: "Gerenciamento",
+        paragraphs: [
+          "Voce pode aceitar todos, recusar cookies nao essenciais ou personalizar preferencias no banner de cookies.",
+          "As preferencias podem ser reabertas pelo link Preferencias de cookies no footer. Cookies necessarios nao podem ser desativados pelo painel porque sao indispensaveis para seguranca e funcionamento.",
+        ],
+      },
+      {
+        title: "Cookies de terceiros",
+        paragraphs: [
+          "Ferramentas externas podem definir cookies proprios conforme suas politicas. A Ateliux deve bloquear scripts nao essenciais ate que o consentimento correspondente exista.",
+          "Se novas ferramentas forem adicionadas, o inventario de cookies deve ser atualizado antes do deploy.",
+        ],
+      },
+    ],
+  },
+  lgpd: {
+    id: "lgpd",
+    title: "LGPD e Direitos do Titular",
+    updatedAt: "29 de junho de 2026",
+    sections: [
+      {
+        title: "Base de atendimento LGPD",
+        paragraphs: [
+          "Esta pagina centraliza informacoes e um canal para solicitacoes relacionadas a dados pessoais tratados pela Ateliux.",
+          "As solicitacoes podem envolver acesso, correcao, eliminacao, portabilidade, revogacao de consentimento, informacoes sobre tratamento ou outros pedidos relacionados a privacidade.",
+        ],
+        notice: [legalReviewNotice],
+      },
+      {
+        title: "Como funciona a solicitacao",
+        paragraphs: [
+          "Ao enviar o formulario, a solicitacao e registrada no backend com data, IP, User-Agent e status inicial aberto para acompanhamento administrativo.",
+          "A equipe podera pedir validacao de identidade antes de responder, especialmente quando a solicitacao envolver dados de conta, projeto, arquivos ou informacoes de terceiros.",
+        ],
+      },
+      {
+        title: "Limites e retencao",
+        paragraphs: [
+          "Alguns dados podem precisar ser mantidos por obrigacao legal, execucao contratual, auditoria, seguranca, prevencao a fraude ou defesa de direitos.",
+          "A exclusao ou anonimizacao sera avaliada conforme a base legal aplicavel, a finalidade do dado e eventuais obrigacoes pendentes.",
         ],
       },
     ],

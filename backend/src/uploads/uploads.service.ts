@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AdminRole,
   FileOrigin,
   FileStatus,
   FileUploadedByType,
@@ -19,10 +20,12 @@ import { FilesService } from '../files/files.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { SecureUploadDto } from './dto/secure-upload.dto';
+import { isUploadContext, type UploadContext } from './constants/upload-policy';
 import {
   UploadValidationService,
   type UploadActorType,
 } from './upload-validation.service';
+import { classifyFileRisk } from './utils/file-risk';
 
 export type UploadRequestMeta = {
   ipAddress?: string;
@@ -35,6 +38,32 @@ type UploadQueuePayload = {
   projectId?: string;
   context: string;
   originalName: string;
+};
+
+const ADMIN_UPLOAD_ROLES: Record<UploadContext, readonly AdminRole[]> = {
+  avatar: [
+    AdminRole.ADMIN,
+    AdminRole.PROJECT_MANAGER,
+    AdminRole.SUPPORT,
+    AdminRole.EDITOR,
+    AdminRole.FINANCE,
+    AdminRole.DESIGNER_DEV,
+    AdminRole.ATTENDANCE,
+  ],
+  blog_cover: [AdminRole.ADMIN, AdminRole.EDITOR, AdminRole.DESIGNER_DEV],
+  blog_hero: [AdminRole.ADMIN, AdminRole.EDITOR, AdminRole.DESIGNER_DEV],
+  contact_attachment: [AdminRole.ADMIN, AdminRole.ATTENDANCE],
+  support_attachment: [AdminRole.ADMIN, AdminRole.SUPPORT, AdminRole.PROJECT_MANAGER],
+  client_file: [
+    AdminRole.ADMIN,
+    AdminRole.PROJECT_MANAGER,
+    AdminRole.DESIGNER_DEV,
+    AdminRole.SUPPORT,
+  ],
+  approval_attachment: [AdminRole.ADMIN, AdminRole.PROJECT_MANAGER, AdminRole.DESIGNER_DEV],
+  briefing_attachment: [AdminRole.ADMIN, AdminRole.PROJECT_MANAGER, AdminRole.DESIGNER_DEV],
+  finance_receipt: [AdminRole.ADMIN, AdminRole.FINANCE],
+  preview_asset: [AdminRole.ADMIN, AdminRole.PROJECT_MANAGER, AdminRole.DESIGNER_DEV],
 };
 
 @Injectable()
@@ -58,7 +87,7 @@ export class UploadsService {
   async uploadClient(file: Express.Multer.File | undefined, dto: SecureUploadDto, user: RequestUser, meta: UploadRequestMeta) {
     if (!user.clientId) throw new ForbiddenException('Client id missing.');
     return this.upload(file, dto, {
-      actorType: 'client',
+      actorType: 'CLIENT',
       user,
       resolvedClientId: user.clientId,
       meta,
@@ -67,7 +96,7 @@ export class UploadsService {
 
   async uploadAdmin(file: Express.Multer.File | undefined, dto: SecureUploadDto, user: RequestUser, meta: UploadRequestMeta) {
     return this.upload(file, dto, {
-      actorType: 'admin',
+      actorType: 'ADMIN',
       user,
       resolvedClientId: dto.clientId,
       meta,
@@ -76,7 +105,7 @@ export class UploadsService {
 
   async uploadPublic(file: Express.Multer.File | undefined, dto: SecureUploadDto, meta: UploadRequestMeta) {
     return this.upload(file, dto, {
-      actorType: 'public',
+      actorType: 'PUBLIC',
       user: null,
       resolvedClientId: undefined,
       meta,
@@ -107,8 +136,8 @@ export class UploadsService {
 
     await this.auditLogs.create({
       actorId,
-      actorType,
-      action: 'FILE_UPLOAD_ATTEMPT',
+      actorType: this.toAuditActorType(actorType),
+      action: this.resolveUploadAttemptAuditAction(actorType),
       entityType: 'FileAsset',
       clientId: input.resolvedClientId,
       projectId: dto.projectId,
@@ -116,11 +145,17 @@ export class UploadsService {
       userAgent: input.meta.userAgent,
       metadata: {
         context: dto.context,
+        actorRole: input.user?.adminRole ?? input.user?.role ?? this.toAuditActorType(actorType),
+        uploadedByType: actorType,
         originalName,
         size: file?.size ?? 0,
         browserMime: file?.mimetype ?? 'unknown',
       },
     });
+
+    if (actorType === 'ADMIN') {
+      await this.assertAdminUploadPermission(dto.context, input.user, actorId, dto, input.meta);
+    }
 
     const ownership = await this.resolveOwnership(dto, input);
 
@@ -135,8 +170,8 @@ export class UploadsService {
     } catch (error) {
       await this.auditLogs.create({
         actorId,
-        actorType,
-        action: 'FILE_UPLOAD_REJECTED_VALIDATION',
+        actorType: this.toAuditActorType(actorType),
+        action: this.resolveValidationRejectedAuditAction(actorType),
         entityType: 'FileAsset',
         clientId: ownership.clientId,
         projectId: ownership.projectId,
@@ -144,6 +179,8 @@ export class UploadsService {
         userAgent: input.meta.userAgent,
         metadata: {
           context: dto.context,
+          actorRole: input.user?.adminRole ?? input.user?.role ?? this.toAuditActorType(actorType),
+          uploadedByType: actorType,
           originalName,
           reason: error instanceof Error ? error.message : 'validation_failed',
         },
@@ -156,6 +193,12 @@ export class UploadsService {
     }
 
     let uploaded: Awaited<ReturnType<StorageService['uploadBuffer']>> | null = null;
+    const risk = classifyFileRisk({
+      extension: validated.names.extension,
+      mimeType: validated.providedMime,
+      detectedMime: validated.detectedMime,
+    });
+    const status = this.resolveInitialStatus(actorType, validated.context, validated.policy.initialStatus);
 
     try {
       uploaded = await this.storage.uploadBuffer({
@@ -183,19 +226,22 @@ export class UploadsService {
           storageProvider: uploaded.provider,
           storageKey: uploaded.publicId,
           cloudinaryPublicId: uploaded.publicId,
+          cloudinaryResourceType: uploaded.resourceType,
           secureUrl: uploaded.secureUrl,
           url: uploaded.secureUrl,
           origin: this.toOrigin(actorType),
           context: validated.policy.context,
           visibility: validated.policy.defaultVisibility,
-          status: this.resolveInitialStatus(actorType, validated.context, validated.policy.initialStatus),
+          status,
+          riskLevel: risk.riskLevel,
+          downloadMode: risk.downloadMode,
         },
       });
 
       await this.auditLogs.create({
         actorId,
-        actorType,
-        action: 'FILE_UPLOADED',
+        actorType: this.toAuditActorType(actorType),
+        action: this.resolveUploadAuditAction(actorType, asset.clientId ?? undefined),
         entityType: 'FileAsset',
         entityId: asset.id,
         clientId: asset.clientId ?? undefined,
@@ -204,10 +250,17 @@ export class UploadsService {
         userAgent: input.meta.userAgent,
         metadata: {
           context: validated.context,
+          actorRole: input.user?.adminRole ?? input.user?.role ?? this.toAuditActorType(actorType),
+          uploadedByType: asset.uploadedByType,
           status: asset.status,
           extension: asset.extension,
+          mimeType: asset.mimeType,
           detectedMime: asset.detectedMime ?? 'unknown',
           size: asset.size,
+          riskLevel: asset.riskLevel,
+          downloadMode: asset.downloadMode,
+          cloudinaryPublicId: asset.cloudinaryPublicId,
+          cloudinaryResourceType: asset.cloudinaryResourceType,
         },
       });
 
@@ -225,11 +278,11 @@ export class UploadsService {
         );
       }
 
-      return asset;
+      return actorType === 'ADMIN' ? asset : this.toClientFileResponse(asset);
     } catch (error) {
       if (uploaded?.publicId) {
         try {
-          await this.storage.deleteAsset(uploaded.publicId);
+          await this.storage.deleteAsset(uploaded.publicId, uploaded.resourceType);
         } catch {
           this.logger.warn(`Cloudinary cleanup failed after upload error. publicId=${uploaded.publicId}`);
         }
@@ -251,7 +304,7 @@ export class UploadsService {
       meta: UploadRequestMeta;
     },
   ) {
-    if (input.actorType === 'client') {
+    if (input.actorType === 'CLIENT') {
       if (!input.user?.clientId) throw new ForbiddenException('Client id missing.');
 
       if (dto.clientId && dto.clientId !== input.user.clientId) {
@@ -263,7 +316,7 @@ export class UploadsService {
       return { clientId: input.user.clientId, projectId: dto.projectId };
     }
 
-    if (input.actorType === 'admin') {
+    if (input.actorType === 'ADMIN') {
       if (dto.projectId && !dto.clientId) {
         const project = await this.prisma.project.findUnique({ where: { id: dto.projectId } });
         if (!project) throw new NotFoundException('Project not found.');
@@ -283,6 +336,39 @@ export class UploadsService {
     }
 
     return { clientId: undefined, projectId: undefined };
+  }
+
+  private async assertAdminUploadPermission(
+    context: string,
+    user: RequestUser | null,
+    actorId: string | undefined,
+    dto: SecureUploadDto,
+    meta: UploadRequestMeta,
+  ) {
+    if (!isUploadContext(context)) return;
+
+    const role = user?.adminRole;
+    const allowedRoles = ADMIN_UPLOAD_ROLES[context];
+
+    if (role && allowedRoles.includes(role)) return;
+
+    await this.auditLogs.create({
+      actorId,
+      actorType: 'admin',
+      action: 'ADMIN_FILE_UPLOAD_DENIED_BY_ROLE',
+      entityType: 'FileAsset',
+      clientId: dto.clientId,
+      projectId: dto.projectId,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+      metadata: {
+        context,
+        actorRole: role ?? 'missing',
+        allowedRoles,
+      },
+    });
+
+    throw new ForbiddenException('Perfil administrativo sem permissao para este contexto de upload.');
   }
 
   private async assertClientExists(clientId: string) {
@@ -329,26 +415,93 @@ export class UploadsService {
   }
 
   private toUploadedByType(actorType: UploadActorType) {
-    if (actorType === 'client') return FileUploadedByType.CLIENT;
-    if (actorType === 'admin') return FileUploadedByType.ADMIN;
+    if (actorType === 'CLIENT') return FileUploadedByType.CLIENT;
+    if (actorType === 'ADMIN') return FileUploadedByType.ADMIN;
+    if (actorType === 'SYSTEM') return FileUploadedByType.SYSTEM;
     return FileUploadedByType.PUBLIC;
   }
 
   private toOrigin(actorType: UploadActorType) {
-    if (actorType === 'client') return FileOrigin.CLIENT;
-    if (actorType === 'admin') return FileOrigin.ATELIUX;
+    if (actorType === 'CLIENT') return FileOrigin.CLIENT;
+    if (actorType === 'ADMIN') return FileOrigin.ATELIUX;
+    if (actorType === 'SYSTEM') return FileOrigin.SYSTEM;
     return FileOrigin.PUBLIC;
   }
 
   private resolveInitialStatus(actorType: UploadActorType, context: string, policyStatus: FileStatus) {
-    if (
-      actorType === 'admin' &&
-      context === 'approval_attachment' &&
-      policyStatus === FileStatus.PENDING_REVIEW
-    ) {
+    void context;
+    if (actorType === 'ADMIN') {
       return FileStatus.APPROVED;
     }
 
     return policyStatus;
+  }
+
+  private resolveUploadAuditAction(actorType: UploadActorType, clientId?: string) {
+    if (actorType === 'CLIENT') return 'CLIENT_FILE_UPLOADED';
+    if (actorType === 'PUBLIC') return 'PUBLIC_FILE_UPLOADED';
+    if (actorType === 'ADMIN' && clientId) return 'ADMIN_FILE_DELIVERED_TO_CLIENT';
+    if (actorType === 'ADMIN') return 'ADMIN_FILE_UPLOADED';
+    return 'SYSTEM_FILE_UPLOADED';
+  }
+
+  private resolveUploadAttemptAuditAction(actorType: UploadActorType) {
+    if (actorType === 'ADMIN') return 'ADMIN_FILE_UPLOAD_ATTEMPT';
+    return 'FILE_UPLOAD_ATTEMPT';
+  }
+
+  private resolveValidationRejectedAuditAction(actorType: UploadActorType) {
+    if (actorType === 'CLIENT') return 'CLIENT_FILE_UPLOAD_REJECTED_VALIDATION';
+    if (actorType === 'PUBLIC') return 'PUBLIC_FILE_UPLOAD_REJECTED_VALIDATION';
+    return 'FILE_UPLOAD_REJECTED_VALIDATION';
+  }
+
+  private toAuditActorType(actorType: UploadActorType) {
+    if (actorType === 'CLIENT') return 'client';
+    if (actorType === 'ADMIN') return 'admin';
+    if (actorType === 'PUBLIC') return 'public';
+    return 'system';
+  }
+
+  private toClientFileResponse(asset: {
+    id: string;
+    clientId: string | null;
+    projectId: string | null;
+    originalName: string;
+    safeName: string;
+    name: string;
+    extension: string;
+    mimeType: string;
+    detectedMime: string | null;
+    size: number;
+    context: unknown;
+    origin: unknown;
+    status: unknown;
+    riskLevel: unknown;
+    downloadMode: unknown;
+    rejectionReason: string | null;
+    createdAt: Date;
+    deletedAt?: Date | null;
+  }) {
+    return {
+      id: asset.id,
+      clientId: asset.clientId,
+      projectId: asset.projectId,
+      originalName: asset.originalName,
+      safeName: asset.safeName,
+      name: asset.name,
+      extension: asset.extension,
+      mimeType: asset.mimeType,
+      detectedMime: asset.detectedMime,
+      size: asset.size,
+      context: asset.context,
+      origin: asset.origin,
+      status: asset.status,
+      riskLevel: asset.riskLevel,
+      downloadMode: asset.downloadMode,
+      rejectionReason: asset.rejectionReason,
+      createdAt: asset.createdAt,
+      deletedAt: asset.deletedAt ?? null,
+    };
   }
 }

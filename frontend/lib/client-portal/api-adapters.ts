@@ -108,29 +108,38 @@ function emptyBlocks(scope: string): ClientProjectBlock[] {
 }
 
 export function toClientProject(record: ApiRecord): ClientProject {
-  const scope = asString(record.scope, "Escopo do projeto em definicao.");
+  const client = typeof record.client === "object" && record.client ? (record.client as ApiRecord) : {};
+  const manager = typeof record.manager === "object" && record.manager ? (record.manager as ApiRecord) : {};
+  const managerUser = typeof manager.user === "object" && manager.user ? (manager.user as ApiRecord) : {};
+  const scope = asString(record.scope, "Escopo ainda nao publicado.");
+  const summary = asString(record.clientFacingSummary, asString(record.description, scope));
+  const currentStage = asString(record.currentStage, "Etapa inicial ainda nao publicada");
+  const managerName = asString(managerUser.name);
   return {
     id: asNumber(record.numericId, 0) || asString(record.id).length,
     apiId: asString(record.id),
     name: asString(record.name, "Projeto Ateliux"),
     type: asString(record.type, "Projeto digital"),
-    plan: asString(record.plan, "Sob medida"),
+    plan: asString(record.plan, asString(client.plan, "Sob medida")),
     status: mapProjectStatus(record.status),
     progress: asNumber(record.progress),
-    currentStage: asString(record.currentStage, "Em andamento"),
+    currentStage,
     nextStage: "Proxima etapa definida pela equipe",
-    estimatedDeadline: formatApiDate(record.deadline),
+    estimatedDeadline: formatApiDate(record.deadline, "Prazo ainda nao publicado"),
     managerId: asNumber(record.managerId, 0),
-    briefing: scope,
-    objective: scope,
-    audience: "Publico definido no briefing do projeto.",
+    briefing: summary,
+    objective: summary,
+    audience: "Publico e prioridades definidos no briefing do projeto.",
     pages: [],
     features: emptyBlocks(scope),
     integrations: [],
     deliverables: [],
     technologies: [],
     usefulLinks: [],
-    notes: ["Dados carregados da API do Portal do Cliente."],
+    notes: [
+      managerName ? `Responsavel principal: ${managerName}.` : "Responsavel principal ainda nao vinculado.",
+      "Dados carregados da API do Portal do Cliente.",
+    ],
   };
 }
 
@@ -206,6 +215,7 @@ export function toClientInvoice(record: ApiRecord, index: number): ClientInvoice
 
 export function toClientHistoryItem(record: ApiRecord, index: number): ClientHistoryItem {
   const metadata = typeof record.metadata === "object" && record.metadata ? (record.metadata as ApiRecord) : {};
+  const actor = asString(metadata.responsibleName, asString(record.actorType, "Ateliux"));
   return {
     id: asNumber(record.numericId, index + 1) || index + 1,
     apiId: asString(record.id),
@@ -214,7 +224,7 @@ export function toClientHistoryItem(record: ApiRecord, index: number): ClientHis
     type: mapHistoryType(record.entityType, record.action),
     title: asString(metadata.title, asString(record.action, "Atualizacao registrada")),
     description: asString(metadata.description, "Registro carregado pela API."),
-    responsible: asString(record.actorType, "Ateliux"),
+    responsible: actor,
     status: asString(record.entityType, "Historico"),
   };
 }

@@ -62,7 +62,7 @@ export const designCareerContent = {
   ],
   profile: {
     image:
-      "https://res.cloudinary.com/df4wjugxk/image/upload/v1780956591/gemini-2.5-flash-image_Prompt_principal_Use_a_imagem_enviada_como_refer%C3%AAncia_principal._Recrie_essa_lo-0_t7ttwj.jpg",
+      "https://res.cloudinary.com/df4wjugxk/image/upload/v1782776570/Ateliux_Logo_-_1_c5r2xx.png",
     alt: "Símbolo visual do Design System da Ateliux",
     badge: "ATELIUX",
     name: "Design System",

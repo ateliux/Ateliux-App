@@ -148,9 +148,21 @@ enum FileUploadedByType {
   SYSTEM
 }
 
+enum FileRiskLevel {
+  SAFE_PREVIEW
+  DOWNLOAD_ONLY
+  HIGH_RISK_DOWNLOAD_ONLY
+}
+
+enum FileDownloadMode {
+  INLINE_ALLOWED
+  ATTACHMENT_ONLY
+}
+
 enum FileContext {
   AVATAR
   BLOG_COVER
+  BLOG_HERO
   CONTACT_ATTACHMENT
   SUPPORT_ATTACHMENT
   CLIENT_FILE
@@ -182,6 +194,11 @@ enum BlogPostStatus {
   ARCHIVED
 }
 
+enum BlogCommentStatus {
+  PUBLISHED
+  DELETED
+}
+
 enum NewsletterStatus {
   ACTIVE
   NEW
@@ -211,12 +228,16 @@ model User {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  adminProfile AdminUser?
-  clientAccount ClientAccount?
-  refreshTokens RefreshToken[]
-  sentMessages  InboxMessage[]
-  uploadedFiles FileAsset[]
-  notifications Notification[]
+  adminProfile   AdminUser?
+  clientAccount  ClientAccount?
+  refreshTokens  RefreshToken[]
+  sentMessages   InboxMessage[]
+  uploadedFiles  FileAsset[]
+  notifications  Notification[]
+  blogComments   BlogComment[]
+  savedBlogPosts SavedBlogPost[]
+  blogShares     BlogShare[]
+  cookieConsents CookieConsent[]
 
   @@index([role])
   @@index([status])
@@ -246,10 +267,11 @@ model AdminUser {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  managedClients        Client[]              @relation("ClientResponsible")
-  managedProjects       Project[]             @relation("ProjectManager")
-  assignedConversations InboxConversation[]    @relation("ConversationAssignee")
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  managedClients        Client[]            @relation("ClientResponsible")
+  managedProjects       Project[]           @relation("ProjectManager")
+  projectMemberships    ProjectTeamMember[]
+  assignedConversations InboxConversation[] @relation("ConversationAssignee")
   blogPosts             BlogPost[]
 
   @@index([role])
@@ -307,10 +329,15 @@ model Project {
   name            String
   type            String
   scope           String
+  description     String?
   status          ProjectStatus @default(DRAFT)
+  priority        Priority      @default(MEDIUM)
   progress        Int           @default(0)
+  startDate       DateTime?
   deadline        DateTime?
   currentStage    String?
+  clientFacingSummary String?
+  internalNotes   String?
   visibleToClient Boolean       @default(false)
   managerId       String?
   createdAt       DateTime      @default(now())
@@ -318,6 +345,7 @@ model Project {
 
   client             Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
   manager            AdminUser?          @relation("ProjectManager", fields: [managerId], references: [id])
+  teamMembers        ProjectTeamMember[]
   stages             ProjectStage[]
   briefings          Briefing[]
   briefingResponses  BriefingResponse[]
@@ -334,11 +362,27 @@ model Project {
 
   @@index([clientId])
   @@index([status])
+  @@index([priority])
   @@index([managerId])
 }
 
+model ProjectTeamMember {
+  id          String   @id @default(cuid())
+  projectId   String
+  adminUserId String
+  roleLabel   String?
+  createdAt   DateTime @default(now())
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, adminUserId])
+  @@index([projectId])
+  @@index([adminUserId])
+}
+
 model ProjectStage {
-  id               String     @id @default(cuid())
+  id               String      @id @default(cuid())
   clientId         String
   projectId        String
   title            String
@@ -361,22 +405,22 @@ model ProjectStage {
 }
 
 model Briefing {
-  id              String          @id @default(cuid())
-  clientId        String
-  projectId       String?
-  title           String
-  type            String?
-  description     String
-  questions       Json?
-  status          BriefingStatus  @default(DRAFT)
-  visibility      VisibilityStatus @default(INTERNAL)
-  sentAt          DateTime?
-  createdById     String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id          String           @id @default(cuid())
+  clientId    String
+  projectId   String?
+  title       String
+  type        String?
+  description String
+  questions   Json?
+  status      BriefingStatus   @default(DRAFT)
+  visibility  VisibilityStatus @default(INTERNAL)
+  sentAt      DateTime?
+  createdById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  client    Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  project   Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  client    Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project   Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
   responses BriefingResponse[]
 
   @@index([clientId])
@@ -385,11 +429,11 @@ model Briefing {
 }
 
 model BriefingResponse {
-  id         String   @id @default(cuid())
-  briefingId String
-  clientId   String
-  projectId  String?
-  answers    Json
+  id          String   @id @default(cuid())
+  briefingId  String
+  clientId    String
+  projectId   String?
+  answers     Json
   submittedAt DateTime @default(now())
 
   briefing Briefing @relation(fields: [briefingId], references: [id], onDelete: Cascade)
@@ -402,19 +446,19 @@ model BriefingResponse {
 }
 
 model Approval {
-  id             String         @id @default(cuid())
-  clientId       String
-  projectId      String?
-  previewId      String?
-  title          String
-  type           String
-  message        String
-  status         ApprovalStatus @default(DRAFT)
-  clientComment  String?
-  sentAt         DateTime?
-  respondedAt    DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id            String         @id @default(cuid())
+  clientId      String
+  projectId     String?
+  previewId     String?
+  title         String
+  type          String
+  message       String
+  status        ApprovalStatus @default(DRAFT)
+  clientComment String?
+  sentAt        DateTime?
+  respondedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -448,22 +492,23 @@ model Preview {
 }
 
 model ClientRequest {
-  id                    String        @id @default(cuid())
-  clientId              String
-  projectId             String?
-  inboxConversationId   String?
-  title                 String
-  description           String
-  category              String?
-  priority              Priority      @default(MEDIUM)
-  status                RequestStatus @default(NEW)
-  response              String?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  id                  String        @id @default(cuid())
+  clientId            String
+  projectId           String?
+  inboxConversationId String?
+  title               String
+  description         String
+  category            String?
+  priority            Priority      @default(MEDIUM)
+  status              RequestStatus @default(NEW)
+  response            String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
-  client            Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  project           Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  inboxConversation InboxConversation? @relation(fields: [inboxConversationId], references: [id], onDelete: SetNull)
+  client            Client                    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project           Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  inboxConversation InboxConversation?        @relation(fields: [inboxConversationId], references: [id], onDelete: SetNull)
+  attachments       ClientRequestAttachment[]
 
   @@index([clientId])
   @@index([projectId])
@@ -472,23 +517,24 @@ model ClientRequest {
 }
 
 model SupportTicket {
-  id                    String       @id @default(cuid())
-  clientId              String?
-  projectId             String?
-  inboxConversationId   String?
-  contactLeadId         String?
-  subject               String
-  category              String
-  priority              Priority     @default(MEDIUM)
-  status                InboxStatus  @default(NEW)
-  lastMessage           String?
-  source                InboxSource  @default(SUPPORT)
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
+  id                  String      @id @default(cuid())
+  clientId            String?
+  projectId           String?
+  inboxConversationId String?
+  contactLeadId       String?
+  subject             String
+  category            String
+  priority            Priority    @default(MEDIUM)
+  status              InboxStatus @default(NEW)
+  lastMessage         String?
+  source              InboxSource @default(SUPPORT)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
-  client            Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  project           Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  inboxConversation InboxConversation? @relation(fields: [inboxConversationId], references: [id], onDelete: SetNull)
+  client            Client?                   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  project           Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  inboxConversation InboxConversation?        @relation(fields: [inboxConversationId], references: [id], onDelete: SetNull)
+  attachments       SupportTicketAttachment[]
 
   @@index([clientId])
   @@index([projectId])
@@ -496,23 +542,51 @@ model SupportTicket {
   @@index([priority])
 }
 
-model InboxConversation {
-  id          String      @id @default(cuid())
-  clientId    String?
-  projectId   String?
-  channel     InboxChannel
-  status      InboxStatus @default(NEW)
-  priority    Priority    @default(MEDIUM)
-  source      InboxSource
-  subject     String
-  preview     String?
-  assigneeId  String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+model ClientRequestAttachment {
+  id              String   @id @default(cuid())
+  clientRequestId String
+  fileAssetId     String
+  createdAt       DateTime @default(now())
 
-  client         Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  project        Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  assignee       AdminUser?       @relation("ConversationAssignee", fields: [assigneeId], references: [id])
+  clientRequest ClientRequest @relation(fields: [clientRequestId], references: [id], onDelete: Cascade)
+  fileAsset     FileAsset     @relation(fields: [fileAssetId], references: [id])
+
+  @@unique([clientRequestId, fileAssetId])
+  @@index([clientRequestId])
+  @@index([fileAssetId])
+}
+
+model SupportTicketAttachment {
+  id              String   @id @default(cuid())
+  supportTicketId String
+  fileAssetId     String
+  createdAt       DateTime @default(now())
+
+  supportTicket SupportTicket @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
+  fileAsset     FileAsset     @relation(fields: [fileAssetId], references: [id])
+
+  @@unique([supportTicketId, fileAssetId])
+  @@index([supportTicketId])
+  @@index([fileAssetId])
+}
+
+model InboxConversation {
+  id         String       @id @default(cuid())
+  clientId   String?
+  projectId  String?
+  channel    InboxChannel
+  status     InboxStatus  @default(NEW)
+  priority   Priority     @default(MEDIUM)
+  source     InboxSource
+  subject    String
+  preview    String?
+  assigneeId String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  client         Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  project        Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  assignee       AdminUser?      @relation("ConversationAssignee", fields: [assigneeId], references: [id])
   messages       InboxMessage[]
   clientRequests ClientRequest[]
   supportTickets SupportTicket[]
@@ -526,12 +600,12 @@ model InboxConversation {
 }
 
 model InboxMessage {
-  id             String     @id @default(cuid())
+  id             String   @id @default(cuid())
   conversationId String
   senderId       String?
   senderType     String
   body           String
-  createdAt      DateTime   @default(now())
+  createdAt      DateTime @default(now())
 
   conversation InboxConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User?             @relation(fields: [senderId], references: [id], onDelete: SetNull)
@@ -542,67 +616,74 @@ model InboxMessage {
 }
 
 model FileAsset {
-  id                 String             @id @default(cuid())
-  clientId           String?
-  projectId          String?
-  messageId          String?
-  uploadedById       String?
-  uploadedByType     FileUploadedByType @default(SYSTEM)
-  originalName       String             @default("unknown")
-  safeName           String             @default("file")
-  name               String
-  extension          String             @default("")
-  mimeType           String
-  detectedMime       String?
-  size               Int
-  storageProvider    String
-  storageKey         String
-  cloudinaryPublicId String?
-  secureUrl          String?
-  url                String
-  origin             FileOrigin         @default(SYSTEM)
-  context            FileContext        @default(CLIENT_FILE)
-  visibility         FileVisibility     @default(PRIVATE)
-  status             FileStatus         @default(PENDING_REVIEW)
-  rejectionReason    String?
-  scanStatus         FileScanStatus     @default(NOT_SCANNED)
-  scanProvider       String?
-  scannedAt          DateTime?
-  scanResult         String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  deletedAt          DateTime?
+  id                     String             @id @default(cuid())
+  clientId               String?
+  projectId              String?
+  messageId              String?
+  uploadedById           String?
+  uploadedByType         FileUploadedByType @default(SYSTEM)
+  originalName           String             @default("unknown")
+  safeName               String             @default("file")
+  name                   String
+  extension              String             @default("")
+  mimeType               String
+  detectedMime           String?
+  size                   Int
+  storageProvider        String
+  storageKey             String
+  cloudinaryPublicId     String?
+  cloudinaryResourceType String?
+  secureUrl              String?
+  url                    String
+  origin                 FileOrigin         @default(SYSTEM)
+  context                FileContext        @default(CLIENT_FILE)
+  visibility             FileVisibility     @default(PRIVATE)
+  status                 FileStatus         @default(PENDING_REVIEW)
+  riskLevel              FileRiskLevel      @default(DOWNLOAD_ONLY)
+  downloadMode           FileDownloadMode   @default(ATTACHMENT_ONLY)
+  rejectionReason        String?
+  scanStatus             FileScanStatus     @default(NOT_SCANNED)
+  scanProvider           String?
+  scannedAt              DateTime?
+  scanResult             String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  deletedAt              DateTime?
 
-  client         Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  project        Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  uploadedBy     User?           @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
-  message        InboxMessage?   @relation(fields: [messageId], references: [id], onDelete: SetNull)
-  financeReceipt FinanceRecord? @relation("FinanceReceipt")
-  blogCoverPosts BlogPost[]      @relation("BlogCover")
+  client         Client?                   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  project        Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  uploadedBy     User?                     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  message        InboxMessage?             @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  financeReceipt FinanceRecord?            @relation("FinanceReceipt")
+  blogCoverPosts BlogPost[]                @relation("BlogCover")
+  blogHeroPosts  BlogPost[]                @relation("BlogHero")
+  clientRequests ClientRequestAttachment[]
+  supportTickets SupportTicketAttachment[]
 
   @@index([clientId])
   @@index([projectId])
   @@index([messageId])
   @@index([context])
   @@index([status])
+  @@index([cloudinaryResourceType])
   @@index([visibility])
   @@index([deletedAt])
 }
 
 model ScheduleEvent {
-  id              String           @id @default(cuid())
-  clientId        String
-  projectId       String?
-  title           String
-  type            String
-  date            DateTime
-  time            String?
-  responsible     String?
-  notes           String?
-  visibility      VisibilityStatus @default(INTERNAL)
-  status          String           @default("SCHEDULED")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id          String           @id @default(cuid())
+  clientId    String
+  projectId   String?
+  title       String
+  type        String
+  date        DateTime
+  time        String?
+  responsible String?
+  notes       String?
+  visibility  VisibilityStatus @default(INTERNAL)
+  status      String           @default("SCHEDULED")
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -613,19 +694,19 @@ model ScheduleEvent {
 }
 
 model FinanceRecord {
-  id            String        @id @default(cuid())
-  clientId      String
-  projectId     String?
-  receiptFileId String?       @unique
-  description   String
-  amount        Decimal       @db.Decimal(12, 2)
-  currency      String        @default("BRL")
-  dueDate       DateTime
-  status        FinanceStatus @default(PENDING)
-  installment   String?
-  visibleToClient Boolean     @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  clientId        String
+  projectId       String?
+  receiptFileId   String?       @unique
+  description     String
+  amount          Decimal       @db.Decimal(12, 2)
+  currency        String        @default("BRL")
+  dueDate         DateTime
+  status          FinanceStatus @default(PENDING)
+  installment     String?
+  visibleToClient Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   client      Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
   project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -638,39 +719,103 @@ model FinanceRecord {
 }
 
 model BlogCategory {
-  id        String     @id @default(cuid())
+  id        String   @id @default(cuid())
   name      String
-  slug      String     @unique
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   posts BlogPost[]
 }
 
 model BlogPost {
-  id          String         @id @default(cuid())
-  categoryId  String?
-  authorId    String?
-  coverFileId String?
-  title       String
-  slug        String         @unique
-  excerpt     String?
-  content     String
-  status      BlogPostStatus @default(DRAFT)
-  readTime    String?
-  publishedAt DateTime?
-  scheduledAt DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id                 String         @id @default(cuid())
+  categoryId         String?
+  authorId           String?
+  coverFileId        String?
+  heroImageFileId    String?
+  title              String
+  slug               String         @unique
+  excerpt            String?
+  content            String
+  status             BlogPostStatus @default(DRAFT)
+  readTime           String?
+  insightTitle       String?
+  insightDescription String?
+  insightCtaLabel    String?
+  insightCtaHref     String?
+  contextTitle       String?
+  contextContent     String?
+  practicalTitle     String?
+  practicalContent   String?
+  seoTitle           String?
+  seoDescription     String?
+  publishedAt        DateTime?
+  scheduledAt        DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
-  category  BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  author    AdminUser?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  coverFile FileAsset?    @relation("BlogCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+  category      BlogCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  author        AdminUser?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  coverFile     FileAsset?      @relation("BlogCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+  heroImageFile FileAsset?      @relation("BlogHero", fields: [heroImageFileId], references: [id], onDelete: SetNull)
+  comments      BlogComment[]
+  savedBy       SavedBlogPost[]
+  shares        BlogShare[]
 
   @@index([categoryId])
   @@index([authorId])
+  @@index([coverFileId])
+  @@index([heroImageFileId])
   @@index([status])
   @@index([publishedAt])
+}
+
+model BlogComment {
+  id        String            @id @default(cuid())
+  postId    String
+  userId    String
+  body      String
+  status    BlogCommentStatus @default(PUBLISHED)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  deletedAt DateTime?
+
+  post BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([userId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model SavedBlogPost {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId])
+  @@index([postId])
+}
+
+model BlogShare {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String?
+  channel   String?
+  createdAt DateTime @default(now())
+
+  post BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([postId])
+  @@index([userId])
 }
 
 model NewsletterSubscriber {
@@ -687,24 +832,24 @@ model NewsletterSubscriber {
 }
 
 model ContactLead {
-  id                    String            @id @default(cuid())
-  inboxConversationId   String?           @unique
-  name                  String
-  email                 String
-  phone                 String?
-  company               String?
-  projectType           String?
-  budget                String?
-  timeline              String?
-  currentSite           String?
-  skills                String?
-  message               String
-  fileAssetId           String?
-  origin                String            @default("site")
-  status                ContactLeadStatus @default(NEW)
-  responsibleId         String?
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
+  id                  String            @id @default(cuid())
+  inboxConversationId String?           @unique
+  name                String
+  email               String
+  phone               String?
+  company             String?
+  projectType         String?
+  budget              String?
+  timeline            String?
+  currentSite         String?
+  skills              String?
+  message             String
+  fileAssetId         String?
+  origin              String            @default("site")
+  status              ContactLeadStatus @default(NEW)
+  responsibleId       String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   inboxConversation InboxConversation? @relation(fields: [inboxConversationId], references: [id], onDelete: SetNull)
 
@@ -759,5 +904,51 @@ model AuditLog {
   @@index([entityId])
   @@index([clientId])
   @@index([projectId])
+  @@index([createdAt])
+}
+
+model CookieConsent {
+  id             String   @id @default(cuid())
+  userId         String?
+  anonymousId    String?
+  email          String?
+  ipAddress      String?
+  userAgent      String?
+  source         String
+  consentVersion String
+  necessary      Boolean  @default(true)
+  preferences    Boolean  @default(false)
+  analytics      Boolean  @default(false)
+  marketing      Boolean  @default(false)
+  acceptedAll    Boolean  @default(false)
+  rejectedAll    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([email])
+  @@index([source])
+  @@index([createdAt])
+}
+
+model PrivacyRequest {
+  id           String   @id @default(cuid())
+  name         String
+  email        String
+  type         String
+  message      String?
+  status       String   @default("OPEN")
+  internalNote String?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([email])
+  @@index([type])
+  @@index([status])
   @@index([createdAt])
 }

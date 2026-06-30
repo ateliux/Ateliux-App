@@ -2,7 +2,7 @@ import Image from "next/image";
 import { backendBrowserContent } from "../../content/home";
 
 const ateliuxFavicon =
-  "https://res.cloudinary.com/df4wjugxk/image/upload/v1781875934/Favicon_1_x8o5ul.png";
+  "https://res.cloudinary.com/df4wjugxk/image/upload/v1782776766/favicon_2_lqsplv.png";
 
 export function MissingLinkDiagram() {
   const { missingLink } = backendBrowserContent;

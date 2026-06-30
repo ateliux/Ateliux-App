@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { MockAuthProvider } from "../components/auth/MockAuthProvider";
 import { SiteShell } from "../components/layout/SiteShell";
+import { CookieConsentBanner } from "../components/privacy/CookieConsentBanner";
 
 export const metadata: Metadata = {
   title: "Ateliux — Software sob medida",
@@ -19,6 +20,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-white text-slate-900 antialiased selection:bg-black selection:text-white">
         <MockAuthProvider>
           <SiteShell>{children}</SiteShell>
+          <CookieConsentBanner />
         </MockAuthProvider>
       </body>
     </html>

@@ -38,6 +38,8 @@ import { MailModule } from './mail/mail.module';
 import { StorageModule } from './storage/storage.module';
 import { CacheModule } from './cache/cache.module';
 import { QueuesModule } from './queues/queues.module';
+import { HealthModule } from './health/health.module';
+import { PrivacyModule } from './privacy/privacy.module';
 
 @Module({
   imports: [
@@ -100,6 +102,8 @@ import { QueuesModule } from './queues/queues.module';
     StorageModule,
     CacheModule,
     QueuesModule,
+    HealthModule,
+    PrivacyModule,
   ],
   providers: [
     {

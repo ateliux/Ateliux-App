@@ -5,11 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { footerContent } from "../../content/home";
 import { legalNavigation, socialNavigation } from "../../data/navigation";
+import { requestCookiePreferencesOpen } from "../../lib/privacy/cookie-consent";
 import { MotionItem } from "../motion";
 
 type SocialIconProps = SVGProps<SVGSVGElement>;
 
-function TwitterIcon(props: SocialIconProps) {
+function XIcon(props: SocialIconProps) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -18,6 +19,14 @@ function TwitterIcon(props: SocialIconProps) {
       {...props}
     >
       <path d="M18.244 2H21.5l-7.11 8.126L22.75 22h-6.545l-5.126-6.7L5.213 22H1.955l7.605-8.693L1.5 2h6.71l4.633 6.124L18.244 2Zm-1.142 17.91h1.804L7.23 3.98H5.292L17.102 19.91Z" />
+    </svg>
+  );
+}
+
+function FacebookIcon(props: SocialIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+      <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.03 3.66 9.2 8.44 9.94v-7.03H7.9v-2.91h2.54V9.84c0-2.52 1.49-3.91 3.78-3.91 1.1 0 2.24.2 2.24.2v2.48h-1.26c-1.24 0-1.63.78-1.63 1.57v1.88h2.77l-.44 2.91h-2.33V22C18.34 21.26 22 17.09 22 12.06Z" />
     </svg>
   );
 }
@@ -60,8 +69,9 @@ function LinkedInIcon(props: SocialIconProps) {
 }
 
 const socialIconMap = {
-  Twitter: TwitterIcon,
+  X: XIcon,
   Instagram: InstagramIcon,
+  Facebook: FacebookIcon,
   LinkedIn: LinkedInIcon,
 } as const;
 
@@ -105,6 +115,13 @@ export function Footer() {
                 {item.label}
               </Link>
             ))}
+            <button
+              type="button"
+              onClick={requestCookiePreferencesOpen}
+              className={`transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-4 ${linkClassName}`}
+            >
+              Preferencias de cookies
+            </button>
           </nav>
 
           <nav className="flex items-center gap-5" aria-label="Redes sociais">
@@ -120,6 +137,8 @@ export function Footer() {
                   key={item.label}
                   href={item.href}
                   aria-label={item.label}
+                  target="_blank"
+                  rel="noreferrer"
                   className={`transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-4 ${linkClassName}`}
                 >
                   <Icon className="h-4 w-4" />

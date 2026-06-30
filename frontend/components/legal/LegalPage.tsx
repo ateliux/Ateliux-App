@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { LegalPageContent } from "../../content/legal";
 import { LegalArticle } from "./LegalArticle";
 import { LegalTabs } from "./LegalTabs";
@@ -5,9 +6,10 @@ import { MotionItem } from "../motion";
 
 type LegalPageProps = {
   page: LegalPageContent;
+  children?: ReactNode;
 };
 
-export function LegalPage({ page }: LegalPageProps) {
+export function LegalPage({ page, children }: LegalPageProps) {
   return (
     <main className="min-h-screen bg-[#FFF] text-gray-900">
       <MotionItem>
@@ -17,12 +19,17 @@ export function LegalPage({ page }: LegalPageProps) {
             {page.title}
           </h1>
 
+          <p className="mt-5 text-sm text-gray-500">
+            Atualizado em {page.updatedAt}
+          </p>
+
           <LegalTabs activeId={page.id} />
         </div>
       </section>
       </MotionItem>
 
       <MotionItem><LegalArticle page={page} /></MotionItem>
+      {children}
     </main>
   );
 }

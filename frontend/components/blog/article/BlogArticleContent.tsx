@@ -31,7 +31,7 @@ export function BlogArticleContent({ article }: BlogArticleContentProps) {
             ))}
           </div>
 
-          {index === 1 ? (
+          {index === 1 && article.inlineMedia ? (
             <BlogArticleInlineMedia media={article.inlineMedia} />
           ) : null}
         </section>

@@ -1,10 +1,9 @@
-import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
-import type { Response } from 'express';
-import { AUTH_COOKIE_NAMES } from '../common/constants/cookies';
+import type { Request, Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/utils/request-user';
+import { AuthCookieService } from './auth-cookie.service';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterClientDto } from './dto/register-client.dto';
@@ -15,29 +14,36 @@ import { ClientAuthGuard } from './guards/client-auth.guard';
 export class ClientAuthController {
   constructor(
     private readonly auth: AuthService,
-    private readonly config: ConfigService,
+    private readonly cookies: AuthCookieService,
   ) {}
 
   @Post('register')
   async register(@Body() dto: RegisterClientDto, @Res({ passthrough: true }) response: Response) {
     const result = await this.auth.registerClient(dto);
-    this.setCookies(response, result.tokens.accessToken, result.tokens.refreshToken, result.tokens.refreshExpiresAt);
+    this.cookies.setAuthCookies(response, 'client', result.tokens);
     return { user: result.user };
   }
 
   @Post('login')
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: Response) {
     const result = await this.auth.loginClient(dto);
-    this.setCookies(response, result.tokens.accessToken, result.tokens.refreshToken, result.tokens.refreshExpiresAt);
+    this.cookies.setAuthCookies(response, 'client', result.tokens);
     return { user: result.user, client: result.client };
   }
 
-  @ApiCookieAuth()
-  @UseGuards(ClientAuthGuard)
   @Post('logout')
-  async logout(@CurrentUser() user: RequestUser, @Res({ passthrough: true }) response: Response) {
-    this.clearCookies(response);
-    return this.auth.logout(user);
+  async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    const refreshToken = this.cookies.getRefreshToken(request, 'client');
+    this.cookies.clearAuthCookies(response, 'client');
+    return this.auth.logoutByRefreshToken(refreshToken);
+  }
+
+  @Post('refresh')
+  async refresh(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    const refreshToken = this.cookies.getRefreshToken(request, 'client');
+    const result = await this.auth.refreshClient(refreshToken);
+    this.cookies.setAuthCookies(response, 'client', result.tokens);
+    return { user: result.user, client: result.client };
   }
 
   @ApiCookieAuth()
@@ -45,33 +51,5 @@ export class ClientAuthController {
   @Get('me')
   me(@CurrentUser() user: RequestUser) {
     return this.auth.me(user);
-  }
-
-  private setCookies(response: Response, accessToken: string, refreshToken: string, refreshExpiresAt: Date) {
-    const secure = this.config.getOrThrow<boolean>('auth.cookieSecure');
-    const sameSite = this.config.getOrThrow<'lax' | 'strict' | 'none'>('auth.cookieSameSite');
-    const domain = this.config.getOrThrow<string>('auth.cookieDomain');
-
-    response.cookie(AUTH_COOKIE_NAMES.access, accessToken, {
-      httpOnly: true,
-      secure,
-      sameSite,
-      domain,
-      maxAge: 15 * 60 * 1000,
-      path: '/',
-    });
-    response.cookie(AUTH_COOKIE_NAMES.refresh, refreshToken, {
-      httpOnly: true,
-      secure,
-      sameSite,
-      domain,
-      expires: refreshExpiresAt,
-      path: '/',
-    });
-  }
-
-  private clearCookies(response: Response) {
-    response.clearCookie(AUTH_COOKIE_NAMES.access, { path: '/' });
-    response.clearCookie(AUTH_COOKIE_NAMES.refresh, { path: '/' });
   }
 }

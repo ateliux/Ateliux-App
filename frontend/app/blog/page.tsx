@@ -4,6 +4,7 @@ import { blogArticles } from "../../content/blog";
 import { toBlogPost } from "../../lib/blog/api-blog-adapters";
 import { canUseDevFallback } from "../../lib/env/is-dev-fallback-enabled";
 import { listPublishedBlogPosts } from "../../services/blog.service";
+import type { BlogPost } from "../../content/blog";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function BlogRoute() {
-  let posts;
+  let posts: BlogPost[] | undefined;
   let error = "";
 
   try {
@@ -24,6 +25,7 @@ export default async function BlogRoute() {
       posts = blogArticles.map((article) => article);
       error = "Usando fallback de desenvolvimento porque a API do blog nao respondeu.";
     } else {
+      posts = [];
       error = loadError instanceof Error ? loadError.message : "Nao foi possivel carregar o blog agora.";
     }
   }

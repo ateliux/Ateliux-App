@@ -1,11 +1,20 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
-import { FileStatus, FileVisibility, NotificationAudience, UserRole } from '@prisma/client';
+import {
+  FileDownloadMode,
+  FileRiskLevel,
+  FileStatus,
+  FileVisibility,
+  NotificationAudience,
+  UserRole,
+} from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { StorageService } from '../storage/storage.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -33,6 +42,26 @@ export class FilesService {
         status: { not: FileStatus.DELETED },
       },
       orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        clientId: true,
+        projectId: true,
+        originalName: true,
+        safeName: true,
+        name: true,
+        extension: true,
+        mimeType: true,
+        detectedMime: true,
+        size: true,
+        context: true,
+        origin: true,
+        status: true,
+        riskLevel: true,
+        downloadMode: true,
+        rejectionReason: true,
+        createdAt: true,
+        deletedAt: true,
+      },
     });
   }
 
@@ -95,14 +124,6 @@ export class FilesService {
       },
     });
 
-    if (file.cloudinaryPublicId) {
-      try {
-        await this.storage.deleteAsset(file.cloudinaryPublicId);
-      } catch {
-        this.logger.warn(`Cloudinary cleanup failed after rejection. fileId=${id}`);
-      }
-    }
-
     await this.auditLogs.create({
       actorId: user.adminUserId ?? user.id,
       actorType: 'admin',
@@ -154,7 +175,11 @@ export class FilesService {
     let url = file.secureUrl ?? file.url;
 
     try {
-      url = this.storage.signedUrl(publicId);
+      url = this.storage.signedUrl(publicId, {
+        attachmentName: file.safeName,
+        forceAttachment: this.shouldForceAttachment(file),
+        resourceType: file.cloudinaryResourceType,
+      });
     } catch {
       if (!url) {
         throw new BadRequestException('Arquivo sem URL disponivel.');
@@ -165,68 +190,269 @@ export class FilesService {
     await this.auditLogs.create({
       actorId: user.adminUserId ?? user.id,
       actorType: user.role === UserRole.ADMIN ? 'admin' : 'client',
-      action: 'FILE_SIGNED_URL_REQUESTED',
+      action: user.role === UserRole.ADMIN ? 'ADMIN_FILE_DOWNLOAD_REQUESTED' : 'FILE_SIGNED_URL_REQUESTED',
       entityType: 'FileAsset',
       entityId: file.id,
       clientId: file.clientId ?? undefined,
       projectId: file.projectId ?? undefined,
+      metadata: {
+        riskLevel: file.riskLevel ?? FileRiskLevel.DOWNLOAD_ONLY,
+        downloadMode: file.downloadMode ?? FileDownloadMode.ATTACHMENT_ONLY,
+        forceAttachment: this.shouldForceAttachment(file),
+      },
     });
 
-    return { url };
+    return {
+      url,
+      riskLevel: file.riskLevel ?? FileRiskLevel.DOWNLOAD_ONLY,
+      downloadMode: file.downloadMode ?? FileDownloadMode.ATTACHMENT_ONLY,
+    };
   }
 
   async remove(id: string, user?: RequestUser) {
     const file = await this.ensureExists(id);
+    const actorId = user?.adminUserId ?? user?.id;
 
-    if (user?.role === UserRole.CLIENT && (!user.clientId || file.clientId !== user.clientId)) {
+    if (!user || user.role !== UserRole.ADMIN) {
       await this.auditLogs.create({
-        actorId: user.id,
-        actorType: 'client',
-        action: 'UNAUTHORIZED_FILE_ACCESS_ATTEMPT',
+        actorId,
+        actorType: user?.role === UserRole.CLIENT ? 'client' : 'system',
+        action: 'FILE_DELETE_BLOCKED_PERMISSION',
         entityType: 'FileAsset',
         entityId: file.id,
         clientId: file.clientId ?? undefined,
         projectId: file.projectId ?? undefined,
+        metadata: {
+          actorRole: user?.adminRole ?? user?.role ?? 'missing',
+          statusBefore: file.status,
+        },
       });
-      throw new ForbiddenException('Arquivo nao pertence ao cliente autenticado.');
+      throw new ForbiddenException('Somente a admin pode excluir arquivos do armazenamento.');
     }
 
-    let cloudinaryDeleted = false;
-
-    if (file.cloudinaryPublicId) {
-      try {
-        await this.storage.deleteAsset(file.cloudinaryPublicId);
-        cloudinaryDeleted = true;
-      } catch {
-        this.logger.warn(`Cloudinary delete failed. fileId=${id}`);
-      }
+    if (file.status === FileStatus.DELETED) {
+      return {
+        id: file.id,
+        status: FileStatus.DELETED,
+        storageDeleted: true,
+        storageProvider: file.storageProvider,
+        storageDeleteResult: 'already_deleted',
+      };
     }
 
-    await this.prisma.fileAsset.update({
-      where: { id },
-      data: { status: FileStatus.DELETED, deletedAt: new Date() },
+    const usedBy = await this.getFileUsage(file.id);
+
+    await this.auditLogs.create({
+      actorId,
+      actorType: 'admin',
+      action: 'FILE_DELETE_REQUESTED',
+      entityType: 'FileAsset',
+      entityId: file.id,
+      clientId: file.clientId ?? undefined,
+      projectId: file.projectId ?? undefined,
+      metadata: {
+        actorRole: user.adminRole ?? user.role,
+        fileId: file.id,
+        storageProvider: file.storageProvider,
+        cloudinaryPublicId: file.cloudinaryPublicId,
+        cloudinaryResourceType: this.resolveCloudinaryResourceType(file),
+        originalName: file.originalName,
+        statusBefore: file.status,
+        usedBy,
+      },
     });
 
-    if (user) {
+    if (this.hasBlockingUsage(usedBy)) {
       await this.auditLogs.create({
-        actorId: user.adminUserId ?? user.id,
-        actorType: user.role === UserRole.ADMIN ? 'admin' : 'client',
-        action: 'FILE_DELETED',
+        actorId,
+        actorType: 'admin',
+        action: 'FILE_DELETE_BLOCKED_IN_USE',
         entityType: 'FileAsset',
         entityId: file.id,
         clientId: file.clientId ?? undefined,
         projectId: file.projectId ?? undefined,
-        metadata: { cloudinaryDeleted },
+        metadata: {
+          actorRole: user.adminRole ?? user.role,
+          usedBy,
+          statusBefore: file.status,
+        },
+      });
+
+      throw new ConflictException('Arquivo em uso por outro registro ativo. Remova o vinculo antes de excluir.');
+    }
+
+    let storageDeleted = false;
+    let storageDeleteResult = 'not_applicable';
+
+    if (file.storageProvider === 'cloudinary' && file.cloudinaryPublicId) {
+      const storageResult = await this.storage.deleteFile({
+        provider: file.storageProvider,
+        publicId: file.cloudinaryPublicId,
+        resourceType: this.resolveCloudinaryResourceType(file),
+        invalidate: true,
+      });
+
+      if (!storageResult.success) {
+        await this.auditLogs.create({
+          actorId,
+          actorType: 'admin',
+          action: 'FILE_STORAGE_DELETE_FAILED',
+          entityType: 'FileAsset',
+          entityId: file.id,
+          clientId: file.clientId ?? undefined,
+          projectId: file.projectId ?? undefined,
+          metadata: {
+            actorRole: user.adminRole ?? user.role,
+            storageProvider: file.storageProvider,
+            cloudinaryPublicId: file.cloudinaryPublicId,
+            cloudinaryResourceType: this.resolveCloudinaryResourceType(file),
+            originalName: file.originalName,
+            statusBefore: file.status,
+            usedBy,
+            storageResult: {
+              success: storageResult.success,
+              provider: storageResult.provider,
+              publicId: storageResult.publicId,
+              result: this.storageResultLabel(storageResult.result),
+              error: storageResult.error,
+            },
+          },
+        });
+
+        throw new ServiceUnavailableException('Nao foi possivel remover o arquivo do Cloudinary. Tente novamente.');
+      }
+
+      storageDeleted = true;
+      storageDeleteResult = this.storageResultLabel(storageResult.result ?? true);
+
+      await this.auditLogs.create({
+        actorId,
+        actorType: 'admin',
+        action: 'FILE_STORAGE_DELETE_SUCCEEDED',
+        entityType: 'FileAsset',
+        entityId: file.id,
+        clientId: file.clientId ?? undefined,
+        projectId: file.projectId ?? undefined,
+        metadata: {
+          actorRole: user.adminRole ?? user.role,
+          storageProvider: file.storageProvider,
+          cloudinaryPublicId: file.cloudinaryPublicId,
+          cloudinaryResourceType: this.resolveCloudinaryResourceType(file),
+          originalName: file.originalName,
+          statusBefore: file.status,
+          usedBy,
+          storageResult: storageDeleteResult,
+        },
       });
     }
 
-    return { success: true, cloudinaryDeleted };
+    const updated = await this.prisma.fileAsset.update({
+      where: { id },
+      data: {
+        status: FileStatus.DELETED,
+        deletedAt: new Date(),
+        secureUrl: null,
+        url: '',
+      },
+    });
+
+    await this.auditLogs.create({
+      actorId,
+      actorType: 'admin',
+      action: 'FILE_DELETED',
+      entityType: 'FileAsset',
+      entityId: file.id,
+      clientId: file.clientId ?? undefined,
+      projectId: file.projectId ?? undefined,
+      metadata: {
+        actorRole: user.adminRole ?? user.role,
+        fileId: file.id,
+        storageProvider: file.storageProvider,
+        cloudinaryPublicId: file.cloudinaryPublicId,
+        cloudinaryResourceType: this.resolveCloudinaryResourceType(file),
+        originalName: file.originalName,
+        statusBefore: file.status,
+        statusAfter: FileStatus.DELETED,
+        usedBy,
+        storageDeleted,
+        storageResult: storageDeleteResult,
+      },
+    });
+
+    return {
+      ...updated,
+      success: true,
+      storageDeleted,
+      storageProvider: file.storageProvider,
+      storageDeleteResult,
+    };
+  }
+
+  async getFileUsage(fileId: string) {
+    const [
+      usedByBlogPosts,
+      usedByInboxMessages,
+      usedByRequests,
+      usedBySupportTickets,
+      usedByFinanceRecords,
+    ] = await Promise.all([
+      this.prisma.blogPost.count({
+        where: {
+          OR: [{ coverFileId: fileId }, { heroImageFileId: fileId }],
+        },
+      }),
+      this.prisma.inboxMessage.count({
+        where: { attachments: { some: { id: fileId } } },
+      }),
+      this.prisma.clientRequestAttachment.count({ where: { fileAssetId: fileId } }),
+      this.prisma.supportTicketAttachment.count({ where: { fileAssetId: fileId } }),
+      this.prisma.financeRecord.count({ where: { receiptFileId: fileId } }),
+    ]);
+
+    return {
+      usedByBlogPosts,
+      usedByInboxMessages,
+      usedByRequests,
+      usedBySupportTickets,
+      usedByPreviews: 0,
+      usedByFinanceRecords,
+    };
   }
 
   private async ensureExists(id: string) {
     const file = await this.prisma.fileAsset.findUnique({ where: { id } });
     if (!file) throw new NotFoundException('File not found.');
     return file;
+  }
+
+  private shouldForceAttachment(file: Awaited<ReturnType<FilesService['ensureExists']>>) {
+    return (
+      file.downloadMode !== FileDownloadMode.INLINE_ALLOWED ||
+      file.riskLevel === FileRiskLevel.HIGH_RISK_DOWNLOAD_ONLY
+    );
+  }
+
+  private hasBlockingUsage(usage: Awaited<ReturnType<FilesService['getFileUsage']>>) {
+    return usage.usedByBlogPosts > 0 || usage.usedByFinanceRecords > 0 || usage.usedByPreviews > 0;
+  }
+
+  private resolveCloudinaryResourceType(file: Awaited<ReturnType<FilesService['ensureExists']>>) {
+    if (file.cloudinaryResourceType === 'image' || file.cloudinaryResourceType === 'video' || file.cloudinaryResourceType === 'raw') {
+      return file.cloudinaryResourceType;
+    }
+
+    if (file.mimeType.startsWith('image/')) return 'image';
+    if (file.mimeType.startsWith('video/')) return 'video';
+    return 'raw';
+  }
+
+  private storageResultLabel(result: unknown) {
+    if (typeof result === 'string') return result;
+    if (typeof result === 'boolean') return result ? 'true' : 'false';
+    if (result && typeof result === 'object' && 'result' in result) {
+      return String((result as { result?: unknown }).result ?? 'unknown');
+    }
+    return result ? 'ok' : 'unknown';
   }
 
   private async notifyClient(

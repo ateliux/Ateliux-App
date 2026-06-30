@@ -103,6 +103,8 @@ export type ClientFile = {
   date: string;
   size: string;
   status: "available" | "processing" | "pending_review" | "approved" | "rejected" | "deleted";
+  riskLevel?: "SAFE_PREVIEW" | "DOWNLOAD_ONLY" | "HIGH_RISK_DOWNLOAD_ONLY";
+  downloadMode?: "INLINE_ALLOWED" | "ATTACHMENT_ONLY";
   context?: string;
   projectId?: string;
   rejectionReason?: string | null;

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { ChevronDown, Upload } from "lucide-react";
 import { contactContent } from "../../content/contact";
+import { siteRoutes } from "../../data/siteRoutes";
 import { ContactInput } from "./ContactInput";
 import { MotionButton, MotionCard, MotionForm, MotionItem } from "../motion";
 import { uploadPublicContactAttachment } from "@/services/uploads.service";
@@ -219,6 +221,13 @@ export function QuoteForm({ initialEmail }: QuoteFormProps) {
           </MotionItem>
 
           <MotionItem staggered className="flex flex-col items-center justify-center gap-3 md:col-span-2">
+            <p className="max-w-2xl text-center text-xs leading-5 text-slate-500">
+              Ao enviar, voce autoriza a Ateliux a usar estes dados para responder sua solicitacao, registrar o lead e dar continuidade ao atendimento. Veja a{" "}
+              <Link href={siteRoutes.privacy} className="font-semibold text-slate-900 underline">
+                Politica de Privacidade
+              </Link>
+              .
+            </p>
             <MotionButton
               type="submit"
               disabled={submitting}

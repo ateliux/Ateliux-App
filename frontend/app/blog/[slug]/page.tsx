@@ -23,8 +23,8 @@ export async function generateMetadata({
   try {
     const article = await getPublishedBlogPost(slug);
     return {
-      title: `${article.title} - Ateliux`,
-      description: article.excerpt ?? undefined,
+      title: `${article.seoTitle ?? article.title} - Ateliux`,
+      description: article.seoDescription ?? article.excerpt ?? undefined,
     };
   } catch {
     const article = canUseDevFallback("frontend/public-blog-article-metadata")

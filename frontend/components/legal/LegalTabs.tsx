@@ -8,7 +8,7 @@ type LegalTabsProps = {
 export function LegalTabs({ activeId }: LegalTabsProps) {
   return (
     <nav
-      className="mt-12 flex items-center gap-8 text-sm text-gray-500"
+      className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm text-gray-500"
       aria-label="Navegação legal"
     >
       {legalNavigation.map((item) => {

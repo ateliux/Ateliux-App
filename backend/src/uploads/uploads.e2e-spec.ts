@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
-import { FileStatus, UserRole } from '@prisma/client';
+import { AdminRole, FileDownloadMode, FileRiskLevel, FileStatus, UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UploadValidationService } from './upload-validation.service';
 import { UploadsController } from './uploads.controller';
@@ -39,6 +39,7 @@ function createService(projectClientId = 'client-1') {
     uploadBuffer: async (input: { safeName: string }) => ({
       provider: 'cloudinary' as const,
       publicId: `ateliux/test/${input.safeName}`,
+      resourceType: input.safeName.endsWith('.png') ? 'image' : 'raw',
       secureUrl: `https://res.cloudinary.com/test/${input.safeName}`,
       folder: 'ateliux/test',
     }),
@@ -99,7 +100,16 @@ const adminUser: RequestUser = {
   id: 'user-admin',
   email: 'admin@ateliux.test',
   role: UserRole.ADMIN,
+  adminRole: AdminRole.ADMIN,
   adminUserId: 'admin-1',
+};
+
+const editorUser: RequestUser = {
+  id: 'user-editor',
+  email: 'editor@ateliux.test',
+  role: UserRole.ADMIN,
+  adminRole: AdminRole.EDITOR,
+  adminUserId: 'admin-editor',
 };
 
 describe('Uploads secure flow', () => {
@@ -175,7 +185,7 @@ describe('Uploads secure flow', () => {
     assert.equal(createdAssets.length, 1);
     assert.equal(createdAssets[0].clientId, 'client-1');
     assert.ok(queueJobs.includes('file.pending_review.notification'));
-    assert.ok(auditActions.includes('FILE_UPLOADED'));
+    assert.ok(auditActions.includes('CLIENT_FILE_UPLOADED'));
   });
 
   it('upload de avatar valido entra APPROVED', async () => {
@@ -202,5 +212,40 @@ describe('Uploads secure flow', () => {
     );
 
     assert.equal((result as { status: FileStatus }).status, FileStatus.APPROVED);
+  });
+
+  it('upload amplo de admin entra APPROVED e nao gera fila de revisao', async () => {
+    const { service, createdAssets, queueJobs, auditActions } = createService();
+    const jsonBuffer = Buffer.from('{"script":"nao renderizar inline"}');
+
+    const result = await service.uploadAdmin(
+      multerFile('tokens.json', 'application/json', jsonBuffer),
+      { context: 'client_file', clientId: 'client-1', projectId: 'project-1' },
+      adminUser,
+      {},
+    );
+
+    assert.equal((result as { status: FileStatus }).status, FileStatus.APPROVED);
+    assert.equal(createdAssets[0].riskLevel, FileRiskLevel.HIGH_RISK_DOWNLOAD_ONLY);
+    assert.equal(createdAssets[0].downloadMode, FileDownloadMode.ATTACHMENT_ONLY);
+    assert.equal(queueJobs.length, 0);
+    assert.ok(auditActions.includes('ADMIN_FILE_DELIVERED_TO_CLIENT'));
+  });
+
+  it('admin sem role adequada recebe 403 em contexto financeiro', async () => {
+    const { service, auditActions } = createService();
+
+    await assert.rejects(
+      () =>
+        service.uploadAdmin(
+          multerFile('recibo.pdf', 'application/pdf', pdfBuffer),
+          { context: 'finance_receipt', clientId: 'client-1' },
+          editorUser,
+          {},
+        ),
+      /sem permissao/,
+    );
+
+    assert.ok(auditActions.includes('ADMIN_FILE_UPLOAD_DENIED_BY_ROLE'));
   });
 });

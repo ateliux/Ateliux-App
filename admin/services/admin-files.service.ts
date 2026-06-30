@@ -9,9 +9,12 @@ import {
 export type AdminFileStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DELETED";
 export type AdminFileVisibility = "PRIVATE" | "CLIENT_VISIBLE" | "PUBLIC";
 export type AdminFileOrigin = "CLIENT" | "ATELIUX" | "PUBLIC" | "SYSTEM";
+export type AdminFileRiskLevel = "SAFE_PREVIEW" | "DOWNLOAD_ONLY" | "HIGH_RISK_DOWNLOAD_ONLY";
+export type AdminFileDownloadMode = "INLINE_ALLOWED" | "ATTACHMENT_ONLY";
 export type AdminFileContext =
   | "AVATAR"
   | "BLOG_COVER"
+  | "BLOG_HERO"
   | "CONTACT_ATTACHMENT"
   | "SUPPORT_ATTACHMENT"
   | "CLIENT_FILE"
@@ -36,12 +39,15 @@ export type AdminFileAsset = {
   storageProvider: string;
   storageKey: string;
   cloudinaryPublicId?: string;
+  cloudinaryResourceType?: "image" | "video" | "raw" | string | null;
   secureUrl?: string;
   url?: string;
   origin: AdminFileOrigin;
   context: AdminFileContext;
   visibility: AdminFileVisibility;
   status: AdminFileStatus;
+  riskLevel: AdminFileRiskLevel;
+  downloadMode: AdminFileDownloadMode;
   rejectionReason?: string | null;
   scanStatus?: "NOT_SCANNED" | "PENDING" | "CLEAN" | "INFECTED" | "FAILED";
   createdAt: string;
@@ -85,12 +91,15 @@ function fallbackFiles(): AdminFileAsset[] {
       storageProvider: "mock-cloudinary",
       storageKey: `mock/${file.id}`,
       cloudinaryPublicId: `mock/${file.id}`,
+      cloudinaryResourceType: file.type === "PDF" ? "raw" : "image",
       secureUrl: "#",
       url: "#",
       origin: file.origin === "Cliente" ? "CLIENT" : "ATELIUX",
       context: mockContexts[index % mockContexts.length],
       visibility: file.visibleToClient ? "CLIENT_VISIBLE" : "PRIVATE",
       status,
+      riskLevel: file.type === "PDF" ? "SAFE_PREVIEW" : "DOWNLOAD_ONLY",
+      downloadMode: file.type === "PDF" ? "INLINE_ALLOWED" : "ATTACHMENT_ONLY",
       rejectionReason: status === "REJECTED" ? "Arquivo de demonstracao rejeitado no fallback mockado." : null,
       scanStatus: "NOT_SCANNED",
       createdAt: new Date().toISOString(),
@@ -129,6 +138,8 @@ export async function createAdminFileAsset(input: {
   context?: AdminFileContext;
   visibility?: AdminFileVisibility;
   status?: AdminFileStatus;
+  riskLevel?: AdminFileRiskLevel;
+  downloadMode?: AdminFileDownloadMode;
 }) {
   return apiRequest<AdminFileAsset>("/admin/files", {
     method: "POST",
@@ -152,9 +163,40 @@ export async function rejectAdminFile(id: string, reason: string) {
 }
 
 export async function deleteAdminFile(id: string) {
-  return apiRequest<{ success: boolean }>(`/admin/files/${id}`, { method: "DELETE" });
+  return apiRequest<AdminFileAsset & { success: boolean; storageDeleted: boolean; storageDeleteResult?: unknown }>(`/admin/files/${id}`, { method: "DELETE" });
 }
 
 export async function getSignedFileUrl(id: string) {
-  return apiRequest<{ url: string }>(`/files/${id}/signed-url`);
+  return apiRequest<{ url: string; riskLevel: AdminFileRiskLevel; downloadMode: AdminFileDownloadMode }>(`/files/${id}/signed-url`);
+}
+
+export async function getAdminFileSignedUrl(id: string) {
+  return getSignedFileUrl(id);
+}
+
+export async function uploadAdminBlogImage(file: File, context: "blog_cover" | "blog_hero") {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("context", context);
+
+  return apiRequest<AdminFileAsset>("/admin/uploads", {
+    method: "POST",
+    body,
+  });
+}
+
+export async function uploadAdminPortalFile(
+  file: File,
+  input: { context?: "client_file" | "approval_attachment" | "briefing_attachment" | "finance_receipt" | "preview_asset"; clientId: string; projectId?: string },
+) {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("context", input.context ?? "client_file");
+  body.append("clientId", input.clientId);
+  if (input.projectId) body.append("projectId", input.projectId);
+
+  return apiRequest<AdminFileAsset>("/admin/uploads", {
+    method: "POST",
+    body,
+  });
 }
