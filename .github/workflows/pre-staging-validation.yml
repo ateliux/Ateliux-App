@@ -1,0 +1,122 @@
+name: Pre-Staging Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: "Run Playwright E2E against configured environment"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ateliux
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ateliux"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ateliux?schema=public
+      JWT_ACCESS_SECRET: ci-access-secret-change-in-real-env
+      JWT_REFRESH_SECRET: ci-refresh-secret-change-in-real-env
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      COOKIE_SECRET: ci-cookie-secret-change-in-real-env-32
+      COOKIE_DOMAIN: ""
+      COOKIE_SECURE: "false"
+      COOKIE_SAME_SITE: lax
+      CLIENT_APP_URL: http://localhost:3000
+      ADMIN_APP_URL: http://localhost:3002
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3002
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      ALLOW_DEMO_SEED: "false"
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3001/api
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      NEXT_PUBLIC_ADMIN_URL: http://localhost:3002
+      NEXT_PUBLIC_ENABLE_DEV_FALLBACK: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Install admin dependencies
+        run: npm ci
+        working-directory: admin
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+        working-directory: backend
+
+      - name: Validate backend
+        run: npm run validate:backend
+
+      - name: Validate admin
+        run: npm run validate:admin
+
+      - name: Validate frontend
+        run: npm run validate:frontend
+
+      - name: Root audit
+        run: npm audit
+
+      - name: Install Playwright browser
+        if: ${{ inputs.run_e2e == 'true' }}
+        run: npx playwright install chromium
+
+      - name: Playwright E2E
+        if: ${{ inputs.run_e2e == 'true' }}
+        env:
+          E2E_BASE_API_URL: http://localhost:3001/api
+          E2E_ADMIN_URL: http://localhost:3002
+          E2E_FRONTEND_URL: http://localhost:3000
+          E2E_TARGET_ENV: local
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
+          E2E_ALLOW_NON_LOCAL: "false"
+          E2E_ALLOW_PRODUCTION: "false"
+        run: npm run validate:e2e

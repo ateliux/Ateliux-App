@@ -29,6 +29,16 @@ enum AccountStatus {
   ARCHIVED
 }
 
+enum ClientPipelineStatus {
+  NEW
+  BRIEFING
+  DESIGN
+  DEVELOPMENT
+  APPROVAL
+  COMPLETED
+  INACTIVE
+}
+
 enum ProjectStatus {
   DRAFT
   ACTIVE
@@ -278,16 +288,17 @@ model AdminUser {
 }
 
 model Client {
-  id            String        @id @default(cuid())
-  name          String
-  company       String
-  email         String        @unique
-  phone         String?
-  plan          String
-  status        AccountStatus @default(INVITED)
-  responsibleId String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id             String               @id @default(cuid())
+  name           String
+  company        String
+  email          String               @unique
+  phone          String?
+  plan           String
+  status         AccountStatus        @default(INVITED)
+  pipelineStatus ClientPipelineStatus @default(NEW)
+  responsibleId  String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
   responsible        AdminUser?          @relation("ClientResponsible", fields: [responsibleId], references: [id])
   account            ClientAccount?
@@ -307,6 +318,7 @@ model Client {
   auditLogs          AuditLog[]
 
   @@index([status])
+  @@index([pipelineStatus])
   @@index([responsibleId])
 }
 

@@ -184,9 +184,19 @@ export function ClientProjectPage() {
                 <h2 className="mt-4 text-xl font-bold text-slate-900">{project.name}</h2>
                 <p className="mt-1 text-sm text-slate-500">{project.type} - Plano {project.plan}</p>
               </div>
-              <div className="md:text-right">
-                <p className="text-xs uppercase tracking-wider text-slate-400">Prazo estimado</p>
-                <p className="mt-2 font-semibold text-slate-900">{project.estimatedDeadline}</p>
+              <div className="grid gap-3 sm:grid-cols-3 md:min-w-[420px] md:text-right">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-slate-400">Etapa atual</p>
+                  <p className="mt-2 font-semibold text-slate-900">{project.currentStage}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-slate-400">Progresso</p>
+                  <p className="mt-2 font-semibold text-slate-900">{project.progress}%</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-slate-400">Prazo estimado</p>
+                  <p className="mt-2 font-semibold text-slate-900">{project.estimatedDeadline}</p>
+                </div>
               </div>
             </div>
             <div className="mt-6 grid gap-4 md:grid-cols-3">

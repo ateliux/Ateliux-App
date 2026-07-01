@@ -5,7 +5,7 @@ Auditoria operacional antes de colocar o ecossistema Ateliux em staging/producao
 ## Estado atual
 
 - Backend NestJS com Prisma, PostgreSQL, Redis/BullMQ, auth por cookie httpOnly, modulos de portal, admin, uploads, contato, newsletter e blog.
-- Migrations `20260626200000_contact_lead_file_asset`, `20260627142000_blog_editorial_real`, `20260627183000_file_risk_metadata`, `20260628110000_inbox_message_file_links`, `20260628123000_cloudinary_resource_type` e `20260628201500_project_full_setup` versionadas para `prisma migrate deploy`.
+- Migrations `20260626200000_contact_lead_file_asset`, `20260627142000_blog_editorial_real`, `20260627183000_file_risk_metadata`, `20260628110000_inbox_message_file_links`, `20260628123000_cloudinary_resource_type`, `20260628201500_project_full_setup`, `20260629170000_lgpd_privacy` e `20260630120000_client_pipeline_status` versionadas para `prisma migrate deploy`.
 - Seed demo separada em `backend/prisma/seed.dev.ts` e bloqueada por `NODE_ENV`/`ALLOW_DEMO_SEED`.
 - Bootstrap seguro de admin principal criado em `backend/prisma/bootstrap-admin.ts`.
 - E2E por API validou cliente, admin, revisao de arquivo, solicitacoes, suporte, contato e newsletter.
@@ -15,11 +15,18 @@ Auditoria operacional antes de colocar o ecossistema Ateliux em staging/producao
 - Arte geometrica local do blog e conteudos mockados nao sao usados como imagem real de artigo em producao; posts sem imagem usam placeholder neutro.
 - Anexos de solicitacoes, suporte e mensagens agora aparecem tambem dentro da Caixa de Entrada admin, usando o mesmo `FileAsset` referenciado por `InboxMessage`, `ClientRequestAttachment` e `SupportTicketAttachment`.
 - Criacao completa de projeto admin agora usa `POST /admin/projects/full-setup`, exige responsavel principal, permite equipe interna, cria etapa inicial e opcionais de briefing, cronograma e financeiro em uma transacao.
+- A tela Clientes nao possui mais modal falso de vinculo; a acao e `Criar projeto para este cliente`, levando `clientId` para `/portal-do-cliente/projetos?clientId=<clientId>&create=1` e salvando pelo full setup real.
 - Central operacional do projeto criada na admin em `/portal-do-cliente/projetos/[projectId]`, consumindo `GET /admin/projects/:id/overview`.
 - Portal do Cliente consome responsavel, equipe, plano, etapa atual e resumo a partir dos dados reais de `Project`, `Client`, `AdminUser` e `ProjectTeamMember`.
 - `POST /admin/projects` foi transformado em endpoint legado bloqueado: retorna erro controlado e nao cria `Project`.
 - Edicao segura por `PATCH /admin/projects/:id` bloqueia projeto visivel no Portal sem responsavel, etapa atual, progresso valido, prazo valido e escopo/resumo.
 - Base tecnica LGPD adicionada: `CookieConsent`, `PrivacyRequest`, banner de cookies, paginas legais, formulario LGPD e modulo admin. Textos legais exigem revisao juridica antes de producao.
+- Status comercial de cliente separado do status de conta: `Client.status` controla acesso; `Client.pipelineStatus` controla kanban/lista interna da admin e nao e exposto ao Portal do Cliente.
+- Rotina oficial de validacao adicionada na raiz com `scripts/validate.mjs` e comandos `validate:backend`, `validate:admin`, `validate:frontend`, `validate:e2e`, `validate:all`, `validate:pre-staging` e `validate:pre-production`.
+- Relatorios de validacao sao gerados em `docs/reports/*-validation-latest.md` sem valores de `.env`.
+- Banco limpo de validacao pre-producao foi criado em ambiente local controlado, recebeu migrations via `migrate deploy`, bootstrap admin, `production:check-clean`, `validate:pre-production`, E2E e health check. Relatorio: `docs/reports/preproduction-database-validation-latest.md`.
+- Homologacao Docker local criada para backend + PostgreSQL + Redis, expondo a API em `http://localhost:3054/api` e documentando uso com Vercel/ngrok. Relatorio: `docs/reports/docker-local-homolog-latest.md`.
+- Caminho Docker -> ngrok -> backend validado com health publico, CORS configurado, cookies httpOnly cross-site, login cliente/admin e fluxo projeto visivel/invisivel. Vercel real segue pendente de dominio/redeploy no provedor. Relatorio: `docs/reports/ngrok-vercel-homolog-latest.md`.
 
 ## Auditoria de staging/deploy - 2026-06-27
 
@@ -42,6 +49,7 @@ Checkpoint registrado para o relatorio final: `checkpoint/full-api-integration-v
 - `prisma:seed` agora aponta para `prisma/seed.dev.ts`, que aborta em producao e exige `ALLOW_DEMO_SEED=true`.
 - `prisma:bootstrap-admin` cria somente o admin principal, sem dados demo e sem trocar senha existente sem `BOOTSTRAP_ADMIN_RESET_PASSWORD=true`.
 - `production:check-clean` verifica indicadores demo conhecidos sem apagar dados.
+- `production:clean-demo-data` adiciona limpeza demo controlada, com dry-run por padrao, apply protegido por flags e sem delete fisico no Cloudinary.
 - Validacao de ambiente do backend agora bloqueia em staging/producao:
   - `CORS_ORIGINS=*`;
   - `COOKIE_SECURE=false`;
@@ -127,6 +135,27 @@ Checkpoint registrado para o relatorio final: `checkpoint/full-api-integration-v
 - Acoes disponiveis reutilizam endpoints reais existentes e nao criam uma segunda fonte de dados.
 - Alteracoes em progresso, etapa atual, prazo, responsavel, resumo e visibilidade refletem nos endpoints do Portal do Cliente.
 - Testes automatizados cobrem overview completo, projeto inexistente, roles permitidas/bloqueadas, ocultacao financeira, stats e coerencia com o Portal.
+- Harness Playwright versionado em `/e2e` cobre o fluxo Admin -> Backend -> Portal do Cliente no browser.
+
+### Validacao do fluxo "Criar projeto para este cliente"
+
+Rota e endpoint:
+
+```txt
+/portal-do-cliente/projetos?clientId=<clientId>&create=1
+POST /admin/projects/full-setup
+```
+
+Checklist de staging:
+
+- admin logado acessa Clientes e ve a acao `Criar projeto para este cliente`;
+- nao ha modal de vinculo local ou acao que salve apenas `useState`;
+- full setup recebe `clientId` pela query e bloqueia troca acidental do cliente;
+- projeto com `visibleToClient=true` persiste, redireciona para `/portal-do-cliente/projetos/[projectId]`, sobrevive a F5 e aparece no Portal;
+- projeto com `visibleToClient=false` persiste na admin, sobrevive a F5 e nao aparece no Portal;
+- erro de backend por responsavel/prazo/etapa/resumo ausente nao gera sucesso falso;
+- testes em `backend/src/projects/projects.service.spec.ts` cobrem `clientId`, visibilidade, isolamento por cliente, notificacao e endpoint legado bloqueado.
+- teste browser em `e2e/admin-client-project-flow.spec.ts` cobre criacao de projeto visivel, projeto invisivel, erro sem dados minimos, F5 e ausencia do fluxo falso.
 
 ### Cloudinary
 
@@ -391,4 +420,4 @@ npm run build
 - Fallback local para assets de seed quando Cloudinary nao esta configurado.
 - Dados mockados para telas ainda nao migradas.
 - `NEXT_PUBLIC_ENABLE_DEV_FALLBACK=true` somente em ambiente local.
-- Testes E2E por API sem automacao browser completa.
+- Testes browser Playwright existem para o fluxo principal Admin -> Backend -> Portal; telas/migracoes fora desse fluxo ainda podem precisar de cobertura propria.

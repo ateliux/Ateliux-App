@@ -11,6 +11,72 @@ Documento de execucao e validacao da integracao entre `backend`, `frontend` e `a
 
 Use `localhost` no browser e nos testes locais. Em desenvolvimento, deixe `COOKIE_DOMAIN` vazio para o browser criar cookie host-only em `localhost`; nao use `COOKIE_DOMAIN=localhost`, porque alguns browsers rejeitam ou deixam o cookie instavel. Chamadas para `127.0.0.1` nao compartilham a mesma sessao de `localhost`.
 
+## Validacao Oficial
+
+Scripts oficiais na raiz:
+
+```bash
+npm run validate:backend
+npm run validate:admin
+npm run validate:frontend
+npm run validate:e2e
+npm run validate:all
+npm run validate:pre-staging
+npm run validate:pre-production
+```
+
+A rotina e orquestrada por `scripts/validate.mjs`, para no primeiro erro e gera relatorio em `docs/reports/*-validation-latest.md`.
+
+Fluxo recomendado antes de staging:
+
+```bash
+npm run validate:pre-staging
+```
+
+Fluxo recomendado antes de producao:
+
+```bash
+npm run validate:pre-production
+```
+
+Detalhes operacionais: `docs/pre-staging-validation.md`.
+
+## Homologacao Docker/ngrok
+
+Ambiente local de homologacao:
+
+```txt
+Docker backend:3001
+-> host http://localhost:3054/api
+-> ngrok HTTPS
+-> frontend Vercel com NEXT_PUBLIC_API_BASE_URL=https://<ngrok-host>/api
+```
+
+Guia operacional:
+
+```txt
+DOCKER_LOCAL.md
+```
+
+Relatorios:
+
+```txt
+docs/reports/docker-local-homolog-latest.md
+docs/reports/ngrok-vercel-homolog-latest.md
+```
+
+O caminho Docker -> ngrok -> backend foi validado com health, CORS configurado, cookies httpOnly, login cliente/admin e fluxo projeto visivel/invisivel. A validacao completa Vercel -> ngrok depende do dominio real da Vercel configurado em `.env.docker`, variavel `NEXT_PUBLIC_API_BASE_URL` atualizada na Vercel e redeploy.
+
+Setup de banco limpo para pre-producao:
+
+```txt
+docs/preproduction-database-setup.md
+backend/.env.preproduction.example
+frontend/.env.preproduction.example
+admin/.env.preproduction.example
+.env.e2e.preproduction.example
+```
+
 ## Variaveis
 
 `backend/.env` minimo local:
@@ -61,7 +127,14 @@ Migration aplicada nesta etapa:
 20260628123000_cloudinary_resource_type
 20260628201500_project_full_setup
 20260629170000_lgpd_privacy
+20260630120000_client_pipeline_status
 ```
+
+Status de cliente:
+
+- `Client.status` e status de conta/acesso (`ACTIVE`, `INVITED`, `SUSPENDED`, `ARCHIVED`).
+- `Client.pipelineStatus` e status comercial interno da admin (`NEW`, `BRIEFING`, `DESIGN`, `DEVELOPMENT`, `APPROVAL`, `COMPLETED`, `INACTIVE`).
+- O Portal do Cliente nao deve receber `pipelineStatus`; respostas autenticadas do cliente devem usar objeto `Client` sanitizado.
 
 Fluxo seguro para producao limpa:
 
@@ -74,6 +147,17 @@ npm run production:check-clean
 ```
 
 O bootstrap cria somente o admin principal definido por `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME` e `BOOTSTRAP_ADMIN_PASSWORD`. Ele nao cria clientes, projetos, arquivos, blog, newsletter, financeiro ou inbox demo.
+
+Na raiz existem atalhos seguros:
+
+```bash
+npm run db:check-clean
+npm run db:clean-demo:dry-run
+```
+
+`db:clean-demo:dry-run` nao altera o banco e gera `docs/reports/demo-cleanup-latest.md`. Para aplicar limpeza demo em banco local/staging controlado, use `db:clean-demo:apply` somente com `CONFIRM_CLEAN_DEMO_DATA=true`, `ALLOW_DEMO_CLEANUP=true`, `ALLOW_DEMO_CLEANUP_ENV=local|staging` e `CLEAN_DEMO_DATA_MODE=apply`.
+
+Guia completo: `docs/clean-database-preproduction.md`.
 
 Seed demo local:
 
@@ -140,6 +224,37 @@ E2E real executado em `http://localhost:3001/api`:
 - assinante criado em `POST /newsletter/subscribe`
 - admin lista clientes em `GET /admin/clients`
 - admin abre workspace de projeto em `GET /admin/projects/:id/overview`
+
+## Validacao do fluxo "Criar projeto para este cliente"
+
+Fluxo admin:
+
+```txt
+/clientes
+-> Criar projeto para este cliente
+-> /portal-do-cliente/projetos?clientId=<clientId>&create=1
+-> POST /admin/projects/full-setup
+-> /portal-do-cliente/projetos/[projectId]
+```
+
+Validacoes obrigatorias:
+
+- cliente vindo da query permanece pre-selecionado e bloqueado no full setup;
+- sucesso depende da resposta do backend, sem toast antecipado;
+- F5 na admin e na central do projeto recarrega dados reais;
+- projeto `visibleToClient=true` aparece em `/client/projects`;
+- projeto `visibleToClient=false` nao aparece em `/client/projects`;
+- erro por responsavel ou dados minimos ausentes bloqueia a criacao;
+- `POST /admin/projects` legado segue bloqueado.
+
+Automacao relacionada:
+
+```txt
+backend/src/projects/projects.service.spec.ts
+e2e/admin-client-project-flow.spec.ts
+```
+
+O E2E browser usa Playwright e cria um cliente E2E por API publica real antes de abrir a admin. A criacao do projeto passa pela UI da admin e pelo endpoint real `POST /admin/projects/full-setup`; o Portal do Cliente e validado em `http://localhost:3000/cliente/projeto`.
 
 ## LGPD e consentimento
 
@@ -447,6 +562,18 @@ Admin seleciona cliente
 -> backend grava tudo em transacao
 -> Portal do Cliente le os dados reais por /client/*
 ```
+
+Quando a origem for a tela de clientes:
+
+```txt
+Admin -> Clientes -> Criar projeto para este cliente
+-> /portal-do-cliente/projetos?clientId=<clientId>&create=1
+-> cliente pre-selecionado no full setup
+-> POST /admin/projects/full-setup
+-> /portal-do-cliente/projetos/[projectId]
+```
+
+Nao existe acao de "vincular projeto" apenas visual. Vincular ou mover projeto existente entre clientes nao esta habilitado; se essa operacao for criada no futuro, precisa de endpoint proprio, validacao de dados sensiveis e `AuditLog`.
 
 Endpoints envolvidos:
 

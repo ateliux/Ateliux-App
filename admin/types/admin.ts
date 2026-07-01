@@ -305,7 +305,7 @@ export type AdminClient = {
   lastUpdate: string;
   lastAccess?: string;
   accountStatus?: ClientAccountStatus;
-  linkedProject?: string;
+  projectId?: string;
   notes?: string;
 };
 

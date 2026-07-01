@@ -22,6 +22,7 @@ Admin cria projeto completo
 | Fluxo | Local | Endpoint usado | Campos enviados | Cria responsavel? | Cria historico? | Afeta Portal? | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Criacao completa de projeto | `admin/components/admin/views/PortalManagementView.tsx` | `POST /admin/projects/full-setup` | cliente, nome, tipo, escopo, descricao, status, prioridade, responsavel, equipe, prazo, etapa, progresso, visibilidade, opcionais de briefing/cronograma/financeiro | sim | sim | sim | Principal |
+| Criar projeto para cliente pela tela Clientes | `admin/components/admin/views/ClientsManagementView.tsx` -> `PortalManagementView` | `POST /admin/projects/full-setup` | `clientId` via query string e dados obrigatorios do full setup | sim | sim | sim se visivel | Principal |
 | Service admin antigo | `admin/services/admin-projects.service.ts` | antes chamava `POST /admin/projects` | payload livre/incompleto | incerto | incerto | sim | Removido da admin |
 | Endpoint legado de criacao simples | `backend/src/projects/projects.controller.ts` | `POST /admin/projects` | antes aceitava `CreateProjectDto` | sim, mas sem demais dados minimos | sim | sim | Legado bloqueado |
 | Edicao de projeto | `PortalManagementView` e `PATCH /admin/projects/:id` | `PATCH /admin/projects/:id` | responsavel, equipe, status, prioridade, prazo, progresso, etapa, escopo, resumo, visibilidade | sim | sim para campos importantes | sim | Apenas edicao segura |
@@ -35,7 +36,55 @@ Fluxo oficial unico para criacao de projeto na admin:
 POST /admin/projects/full-setup
 ```
 
+Da tela de clientes, a acao oficial e `Criar projeto para este cliente`. Ela navega para:
+
+```txt
+/portal-do-cliente/projetos?clientId=<clientId>&create=1
+```
+
+O antigo modal "Vincular projeto" foi removido porque nao persistia relacao real. O cliente chega pre-selecionado/bloqueado no full setup e, apos o `POST /admin/projects/full-setup`, a admin navega para:
+
+```txt
+/portal-do-cliente/projetos/[projectId]
+```
+
 `POST /admin/projects` continua existindo apenas como endpoint legado de compatibilidade de rota, mas retorna erro controlado informando que foi substituido por `/admin/projects/full-setup`. Ele nao cria mais `Project`.
+
+## Validacao do fluxo "Criar projeto para este cliente"
+
+Rota usada pela tela de clientes:
+
+```txt
+/portal-do-cliente/projetos?clientId=<clientId>&create=1
+```
+
+Contrato funcional:
+
+- `clientId` vem pela query string e inicializa o full setup.
+- o select de cliente fica bloqueado quando `clientId` esta presente.
+- o submit chama somente `POST /admin/projects/full-setup`.
+- o backend retorna o `projectId` real e a admin redireciona para `/portal-do-cliente/projetos/[projectId]`.
+- `visibleToClient=true` publica o projeto para `/client/projects` e cria notificacao ao cliente.
+- `visibleToClient=false` salva o projeto apenas para admin, sem aparecer no Portal do Cliente.
+- F5 na lista, na central do projeto e no Portal deve manter o estado porque tudo vem da API real.
+- falha de backend nao deve mostrar toast de sucesso nem salvar estado falso.
+
+Testes relacionados:
+
+```txt
+backend/src/projects/projects.service.spec.ts
+e2e/admin-client-project-flow.spec.ts
+```
+
+Cobertura adicionada: `clientId` real, visibilidade no Portal, invisibilidade no Portal, ausencia de notificacao em projeto interno, isolamento entre clientes, bloqueio de dados minimos e endpoint legado bloqueado.
+
+Harness browser versionado:
+
+- framework: Playwright;
+- local: `/e2e`;
+- script: `npm run e2e`;
+- rotina oficial: `npm run validate:e2e`, `npm run validate:all`, `npm run validate:pre-staging` e `npm run validate:pre-production`;
+- cobre admin no navegador, criacao real via full setup, F5, Portal do Cliente, projeto visivel, projeto invisivel, erro sem dados minimos e ausencia do fluxo falso.
 
 ## Central operacional do projeto
 

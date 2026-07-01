@@ -32,7 +32,7 @@ function asDate(value: unknown) {
 
 export function formatApiDate(value: unknown, fallback = "Nao informado") {
   const date = asDate(value);
-  return date ? new Intl.DateTimeFormat("pt-BR").format(date) : fallback;
+  return date ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(date) : fallback;
 }
 
 export function formatApiTime(value: unknown, fallback = "--:--") {

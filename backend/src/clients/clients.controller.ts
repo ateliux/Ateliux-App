@@ -2,11 +2,14 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@n
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AdminRole } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { IdParamDto } from '../common/dto/id-param.dto';
 import { RolesGuard } from '../common/guards/roles.guard';
+import type { RequestUser } from '../common/utils/request-user';
 import { AdminAuthGuard } from '../auth/guards/admin-auth.guard';
 import { ClientsService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
+import { UpdateClientPipelineStatusDto } from './dto/update-client-pipeline-status.dto';
 import { UpdateClientStatusDto } from './dto/update-client-status.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 
@@ -51,5 +54,14 @@ export class ClientsController {
   @Patch(':id/status')
   updateStatus(@Param() params: IdParamDto, @Body() dto: UpdateClientStatusDto) {
     return this.clients.updateStatus(params.id, dto);
+  }
+
+  @Patch(':id/pipeline-status')
+  updatePipelineStatus(
+    @CurrentUser() user: RequestUser,
+    @Param() params: IdParamDto,
+    @Body() dto: UpdateClientPipelineStatusDto,
+  ) {
+    return this.clients.updatePipelineStatus(params.id, dto, user);
   }
 }

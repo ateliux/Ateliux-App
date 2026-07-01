@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Archive,
   CalendarDays,
@@ -58,6 +59,7 @@ type PortalSection = "clients" | "workspace" | "projects" | "briefings" | "stage
 type PortalManagementViewProps = {
   section?: PortalSection;
   clientId?: string;
+  createProject?: boolean;
 };
 
 type ApiRecord = Record<string, unknown>;
@@ -417,7 +419,7 @@ function ClientFilter({
   return (
     <label className="grid gap-2 text-sm font-semibold text-gray-700">
       Cliente
-      <select value={selectedClientId} disabled={locked} onChange={(event) => onChange(event.target.value)} className={inputClassName}>
+      <select data-testid="portal-client-filter" value={selectedClientId} disabled={locked} onChange={(event) => onChange(event.target.value)} className={inputClassName}>
         {!locked ? <option value="all">Todos os clientes</option> : null}
         {clients.map((client) => <option key={client.id} value={String(client.id)}>{client.company}</option>)}
       </select>
@@ -507,20 +509,20 @@ function ProjectSetupPanel({
         <section className="rounded-2xl border border-gray-100 p-5">
           <h4 className="font-bold text-gray-900">2. Dados principais do projeto</h4>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">Nome do projeto<input value={draft.title} onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} className={inputClassName} /></label>
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">Tipo<input value={draft.projectType} onChange={(event) => onDraftChange({ ...draft, projectType: event.target.value })} className={inputClassName} /></label>
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">Status inicial<select value={draft.status} onChange={(event) => onDraftChange({ ...draft, status: event.target.value })} className={inputClassName}><option value="ACTIVE">Ativo</option><option value="WAITING_CLIENT">Aguardando cliente</option><option value="DRAFT">Rascunho interno</option><option value="IN_REVIEW">Em revisao</option></select></label>
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">Prioridade<select value={draft.priority} onChange={(event) => onDraftChange({ ...draft, priority: event.target.value })} className={inputClassName}><option value="LOW">Baixa</option><option value="MEDIUM">Media</option><option value="HIGH">Alta</option><option value="URGENT">Urgente</option></select></label>
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">Inicio<input type="date" value={draft.startDate} onChange={(event) => onDraftChange({ ...draft, startDate: event.target.value })} className={inputClassName} /></label>
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">Prazo final<input type="date" value={draft.deadline} onChange={(event) => onDraftChange({ ...draft, deadline: event.target.value })} className={inputClassName} /></label>
-            <label className="grid gap-2 text-sm font-semibold text-gray-700 lg:col-span-2">Escopo<textarea value={draft.description} onChange={(event) => onDraftChange({ ...draft, description: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Nome do projeto<input data-testid="project-title" value={draft.title} onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Tipo<input data-testid="project-type" value={draft.projectType} onChange={(event) => onDraftChange({ ...draft, projectType: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Status inicial<select data-testid="project-status" value={draft.status} onChange={(event) => onDraftChange({ ...draft, status: event.target.value })} className={inputClassName}><option value="ACTIVE">Ativo</option><option value="WAITING_CLIENT">Aguardando cliente</option><option value="DRAFT">Rascunho interno</option><option value="IN_REVIEW">Em revisao</option></select></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Prioridade<select data-testid="project-priority" value={draft.priority} onChange={(event) => onDraftChange({ ...draft, priority: event.target.value })} className={inputClassName}><option value="LOW">Baixa</option><option value="MEDIUM">Media</option><option value="HIGH">Alta</option><option value="URGENT">Urgente</option></select></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Inicio<input data-testid="project-start-date" type="date" value={draft.startDate} onChange={(event) => onDraftChange({ ...draft, startDate: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Prazo final<input data-testid="project-deadline" type="date" value={draft.deadline} onChange={(event) => onDraftChange({ ...draft, deadline: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700 lg:col-span-2">Escopo<textarea data-testid="project-scope" value={draft.description} onChange={(event) => onDraftChange({ ...draft, description: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
           </div>
         </section>
 
         <section className="rounded-2xl border border-gray-100 p-5">
           <h4 className="font-bold text-gray-900">3. Responsaveis e equipe</h4>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">Responsavel principal<select value={draft.managerId} onChange={(event) => onDraftChange({ ...draft, managerId: event.target.value, teamIds: draft.teamIds.filter((id) => id !== event.target.value) })} className={inputClassName}><option value="">Selecione um responsavel</option>{managerOptions.map((user) => <option key={user.id} value={user.id}>{adminUserLabel(user)}</option>)}</select></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Responsavel principal<select data-testid="project-manager" value={draft.managerId} onChange={(event) => onDraftChange({ ...draft, managerId: event.target.value, teamIds: draft.teamIds.filter((id) => id !== event.target.value) })} className={inputClassName}><option value="">Selecione um responsavel</option>{managerOptions.map((user) => <option key={user.id} value={user.id}>{adminUserLabel(user)}</option>)}</select></label>
             <div className="rounded-2xl bg-gray-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Equipe interna</p>
               <div className="mt-3 grid gap-2">
@@ -539,18 +541,18 @@ function ProjectSetupPanel({
         <section className="rounded-2xl border border-gray-100 p-5">
           <h4 className="font-bold text-gray-900">4. Portal do Cliente</h4>
           <div className="mt-4 grid gap-4 lg:grid-cols-3">
-            <label className="flex items-center gap-3 rounded-2xl bg-gray-50 p-4 text-sm font-semibold text-gray-700"><input type="checkbox" checked={draft.visibleToClient} onChange={(event) => onDraftChange({ ...draft, visibleToClient: event.target.checked })} /> Visivel no Portal</label>
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">Etapa atual<input value={draft.currentStage} onChange={(event) => onDraftChange({ ...draft, currentStage: event.target.value })} className={inputClassName} /></label>
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">Progresso inicial<input type="number" min={0} max={100} value={draft.progress} onChange={(event) => onDraftChange({ ...draft, progress: event.target.value })} className={inputClassName} /></label>
-            <label className="grid gap-2 text-sm font-semibold text-gray-700 lg:col-span-3">Resumo visivel ao cliente<textarea value={draft.clientFacingSummary} onChange={(event) => onDraftChange({ ...draft, clientFacingSummary: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
+            <label className="flex items-center gap-3 rounded-2xl bg-gray-50 p-4 text-sm font-semibold text-gray-700"><input data-testid="project-visible" type="checkbox" checked={draft.visibleToClient} onChange={(event) => onDraftChange({ ...draft, visibleToClient: event.target.checked })} /> Visivel no Portal</label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Etapa atual<input data-testid="project-current-stage" value={draft.currentStage} onChange={(event) => onDraftChange({ ...draft, currentStage: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700">Progresso inicial<input data-testid="project-progress" type="number" min={0} max={100} value={draft.progress} onChange={(event) => onDraftChange({ ...draft, progress: event.target.value })} className={inputClassName} /></label>
+            <label className="grid gap-2 text-sm font-semibold text-gray-700 lg:col-span-3">Resumo visivel ao cliente<textarea data-testid="project-client-summary" value={draft.clientFacingSummary} onChange={(event) => onDraftChange({ ...draft, clientFacingSummary: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
           </div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-gray-100 p-5">
             <h4 className="font-bold text-gray-900">5. Etapa inicial</h4>
-            <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Titulo<input value={draft.stageTitle} onChange={(event) => onDraftChange({ ...draft, stageTitle: event.target.value })} className={inputClassName} /></label>
-            <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Descricao<textarea value={draft.stageDescription} onChange={(event) => onDraftChange({ ...draft, stageDescription: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Titulo<input data-testid="project-stage-title" value={draft.stageTitle} onChange={(event) => onDraftChange({ ...draft, stageTitle: event.target.value })} className={inputClassName} /></label>
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Descricao<textarea data-testid="project-stage-description" value={draft.stageDescription} onChange={(event) => onDraftChange({ ...draft, stageDescription: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
           </div>
           <div className="rounded-2xl border border-gray-100 p-5">
             <h4 className="font-bold text-gray-900">6. Briefing inicial</h4>
@@ -581,12 +583,12 @@ function ProjectSetupPanel({
         <section className="rounded-2xl border border-gray-100 p-5">
           <h4 className="font-bold text-gray-900">9. Revisao</h4>
           <p className="mt-2 text-sm text-gray-500">Obrigatorios: cliente, nome, tipo, escopo, responsavel, prazo, etapa atual, status, prioridade e progresso. Briefing, cronograma e financeiro serao criados apenas se preenchidos.</p>
-          <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Observacoes internas<textarea value={draft.internalNotes} onChange={(event) => onDraftChange({ ...draft, internalNotes: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
+          <label className="mt-4 grid gap-2 text-sm font-semibold text-gray-700">Observacoes internas<textarea data-testid="project-internal-notes" value={draft.internalNotes} onChange={(event) => onDraftChange({ ...draft, internalNotes: event.target.value })} rows={3} className={`${inputClassName} resize-none`} /></label>
         </section>
       </div>
 
       <div className="mt-6 flex justify-end">
-        <AdminButton disabled={saving} onClick={onSubmit}>
+        <AdminButton data-testid="project-full-setup-submit" disabled={saving} onClick={onSubmit}>
           <Plus className="h-4 w-4" />
           {saving ? "Criando projeto..." : "Criar projeto completo"}
         </AdminButton>
@@ -974,7 +976,8 @@ function ClientsView({ data, selectedClientId }: { data: PortalData; selectedCli
   );
 }
 
-export function PortalManagementView({ section = "clients", clientId }: PortalManagementViewProps) {
+export function PortalManagementView({ section = "clients", clientId, createProject = false }: PortalManagementViewProps) {
+  const router = useRouter();
   const initialSection = section === "workspace" ? "clients" : section;
   const lockedClient = Boolean(clientId);
   const [activeSection, setActiveSection] = useState<Exclude<PortalSection, "workspace">>(initialSection);
@@ -1121,12 +1124,13 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
     setSaving(true);
     setNotice("");
     try {
+      let createdProjectId = "";
       if (activeSection === "projects") {
         const stageTitle = draft.stageTitle.trim() || draft.currentStage.trim() || "Planejamento inicial";
         const briefingDescription = draft.briefingDescription.trim();
         const scheduleTitle = draft.scheduleTitle.trim();
         const financeDescription = draft.financeDescription.trim();
-        await createAdminProjectFullSetup({
+        const createdProject = await createAdminProjectFullSetup<ApiRecord>({
           clientId: selectedClientId,
           name: title,
           type: draft.projectType.trim() || "Projeto digital",
@@ -1181,6 +1185,7 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
               }
             : undefined,
         });
+        createdProjectId = asString(createdProject.id);
       }
       if (activeSection === "briefings") {
         await adminPortalApi.briefings.create({ clientId: selectedClientId, projectId: selectedProjectId || undefined, title, type: "Briefing", description, status: "DRAFT", visibility: "INTERNAL" });
@@ -1228,6 +1233,11 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
       }
 
       setDraft(emptyDraft);
+      if (activeSection === "projects" && createdProjectId) {
+        setNotice("Projeto criado na API. Abrindo workspace do projeto...");
+        router.push(`/portal-do-cliente/projetos/${createdProjectId}`);
+        return;
+      }
       setNotice("Registro salvo na API.");
       await loadData();
     } catch (createError) {
@@ -1371,6 +1381,11 @@ export function PortalManagementView({ section = "clients", clientId }: PortalMa
       {section === "workspace" && clientId ? (
         <div className="rounded-2xl border border-[#A7F3D0] bg-[#E6F7F1] px-4 py-3 text-sm font-semibold text-[#00B074]">
           Workspace isolado do cliente selecionado. Todas as criacoes desta tela ficam vinculadas a esse cliente.
+        </div>
+      ) : null}
+      {createProject && activeSection === "projects" && clientId ? (
+        <div className="rounded-2xl border border-[#A7F3D0] bg-[#E6F7F1] px-4 py-3 text-sm font-semibold text-[#00B074]">
+          Criando projeto para o cliente selecionado. O cliente esta pre-selecionado e o projeto sera salvo pelo full setup real.
         </div>
       ) : null}
       {data.fileSource === "mock" ? (

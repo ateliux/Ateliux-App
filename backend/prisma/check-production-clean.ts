@@ -5,7 +5,10 @@ const prisma = new PrismaClient();
 
 type Finding = {
   check: string;
+  table: string;
   count: number;
+  reason: string;
+  suggestion: string;
 };
 
 const demoEmails = ['ana@marima.com', 'bruno@bananinha.com', 'marina.demo@ateliux.com.br'];
@@ -13,9 +16,9 @@ const demoCompanies = ['Marima', 'Bananinha Acai', 'Ateliux Demo'];
 const demoProjectNames = ['E-commerce Marima', 'Site de pedidos', 'Portal Ateliux Demo'];
 const demoPasswords = ['Ateliux@123456', 'Cliente@123456'];
 
-function addFinding(findings: Finding[], check: string, count: number) {
+function addFinding(findings: Finding[], check: string, table: string, count: number, reason: string, suggestion: string) {
   if (count > 0) {
-    findings.push({ check, count });
+    findings.push({ check, table, count, reason, suggestion });
   }
 }
 
@@ -91,18 +94,18 @@ async function checkProductionClean() {
     countDefaultPasswordMatches(),
   ]);
 
-  addFinding(findings, 'usuarios demo conhecidos', demoUsers);
-  addFinding(findings, 'clientes demo conhecidos', demoClients);
-  addFinding(findings, 'projetos demo conhecidos', demoProjects);
-  addFinding(findings, 'previews demo conhecidos', demoPreviews);
-  addFinding(findings, 'arquivos ou URLs Cloudinary demo', demoFiles);
-  addFinding(findings, 'post de blog demo', demoBlogPosts);
-  addFinding(findings, 'assinantes newsletter demo', demoNewsletterSubscribers);
-  addFinding(findings, 'financeiro demo', demoFinanceRecords);
-  addFinding(findings, 'cronograma demo', demoScheduleEvents);
-  addFinding(findings, 'notificacoes demo', demoNotifications);
-  addFinding(findings, 'audit logs demo', demoAuditLogs);
-  addFinding(findings, 'usuarios com senha demo padrao', defaultPasswordMatches);
+  addFinding(findings, 'usuarios demo conhecidos', 'User', demoUsers, 'emails do seed demo local encontrados', 'usar banco limpo ou production:clean-demo-data em ambiente controlado');
+  addFinding(findings, 'clientes demo conhecidos', 'Client', demoClients, 'clientes/empresas do seed demo local encontrados', 'usar banco limpo ou production:clean-demo-data em ambiente controlado');
+  addFinding(findings, 'projetos demo conhecidos', 'Project', demoProjects, 'projetos do seed demo local encontrados', 'usar banco limpo ou production:clean-demo-data em ambiente controlado');
+  addFinding(findings, 'previews demo conhecidos', 'Preview', demoPreviews, 'URL de preview demo encontrada', 'remover dados demo antes de producao');
+  addFinding(findings, 'arquivos ou URLs Cloudinary demo', 'FileAsset', demoFiles, 'URLs/publicIds demo encontrados', 'remover registros demo; Cloudinary fisico exige confirmacao separada');
+  addFinding(findings, 'post de blog demo', 'BlogPost', demoBlogPosts, 'post do seed demo local encontrado', 'remover ou substituir por conteudo real');
+  addFinding(findings, 'assinantes newsletter demo', 'NewsletterSubscriber', demoNewsletterSubscribers, 'assinante demo do seed encontrado', 'remover dados demo');
+  addFinding(findings, 'financeiro demo', 'FinanceRecord', demoFinanceRecords, 'cobranca demo encontrada', 'remover dados demo');
+  addFinding(findings, 'cronograma demo', 'ScheduleEvent', demoScheduleEvents, 'evento demo encontrado', 'remover dados demo');
+  addFinding(findings, 'notificacoes demo', 'Notification', demoNotifications, 'notificacao demo encontrada', 'remover dados demo');
+  addFinding(findings, 'audit logs demo', 'AuditLog', demoAuditLogs, 'logs gerados pelo seed demo encontrados', 'remover dados demo em ambiente controlado');
+  addFinding(findings, 'usuarios com senha demo padrao', 'User', defaultPasswordMatches, 'hash confere com senha demo conhecida', 'trocar senha real ou remover usuario demo');
 
   if (!findings.length) {
     console.log('Production clean check passed. Nenhum dado demo conhecido encontrado.');
@@ -112,7 +115,11 @@ async function checkProductionClean() {
   console.error('Production clean check failed. Dados demo conhecidos encontrados:');
   for (const finding of findings) {
     console.error(`- ${finding.check}: ${finding.count}`);
+    console.error(`  tabela: ${finding.table}`);
+    console.error(`  motivo: ${finding.reason}`);
+    console.error(`  acao sugerida: ${finding.suggestion}`);
   }
+  console.error('A validacao foi bloqueada corretamente. Use banco limpo ou rode production:clean-demo-data primeiro em dry-run.');
   process.exitCode = 1;
 }
 

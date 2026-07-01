@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
-import { AccountStatus, type AdminRole, UserRole } from '@prisma/client';
+import { AccountStatus, type AdminRole, type Client, UserRole } from '@prisma/client';
 import { compare, hash } from 'bcryptjs';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,6 +24,8 @@ type SafeAuthUser = {
   adminRole?: string;
   clientId?: string;
 };
+
+type SafeClient = Pick<Client, 'id' | 'name' | 'company' | 'email' | 'phone' | 'plan' | 'status' | 'responsibleId' | 'createdAt' | 'updatedAt'>;
 
 type RefreshJwtPayload = {
   sub: string;
@@ -151,7 +153,7 @@ export class AuthService {
         role: user.role,
         clientId: user.clientAccount.clientId,
       }),
-      client: user.clientAccount.client,
+      client: this.safeClient(user.clientAccount.client),
       tokens,
     };
   }
@@ -248,7 +250,7 @@ export class AuthService {
               clientId: account.clientId,
             })
           : user,
-        client: account?.client ?? null,
+        client: account?.client ? this.safeClient(account.client) : null,
       };
     }
 
@@ -347,7 +349,7 @@ export class AuthService {
           : { clientId: user.clientAccount!.clientId }),
       }),
       admin: user.adminProfile,
-      client: user.clientAccount?.client ?? null,
+      client: user.clientAccount?.client ? this.safeClient(user.clientAccount.client) : null,
       tokens,
     };
   }
@@ -453,5 +455,20 @@ export class AuthService {
 
   private safeUser(user: SafeAuthUser): SafeAuthUser {
     return user;
+  }
+
+  private safeClient(client: Client): SafeClient {
+    return {
+      id: client.id,
+      name: client.name,
+      company: client.company,
+      email: client.email,
+      phone: client.phone,
+      plan: client.plan,
+      status: client.status,
+      responsibleId: client.responsibleId,
+      createdAt: client.createdAt,
+      updatedAt: client.updatedAt,
+    };
   }
 }

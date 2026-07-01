@@ -7,11 +7,17 @@
 **/out/
 **/build/
 **/coverage/
+**/test-results/
+playwright-report/
 **/*.tsbuildinfo
 
 # Environment and debug files
 **/.env*
 !**/.env.example
+!**/.env.e2e.example
+!**/.env.preproduction.example
+!.env.e2e.preproduction.example
+!.env.docker.example
 **/npm-debug.log*
 **/yarn-debug.log*
 **/yarn-error.log*

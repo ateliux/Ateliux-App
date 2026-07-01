@@ -118,6 +118,18 @@ const pendingFinanceStatuses = new Set<FinanceStatus>([
 ]);
 
 type ProjectOverviewPayload = Prisma.ProjectGetPayload<{ include: typeof projectOverviewInclude }>;
+type PortalClientPayload = {
+  id: string;
+  name: string;
+  company: string;
+  email: string;
+  phone: string | null;
+  plan: string;
+  status: AccountStatus;
+  responsibleId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 type ProjectOverviewPermissions = {
   canViewWorkspace: boolean;
   canEditProject: boolean;
@@ -197,9 +209,9 @@ export class ProjectsService {
     };
   }
 
-  findClientProjects(user: RequestUser) {
+  async findClientProjects(user: RequestUser) {
     if (!user.clientId) throw new ForbiddenException('Client id missing.');
-    return this.prisma.project.findMany({
+    const projects = await this.prisma.project.findMany({
       where: { clientId: user.clientId, visibleToClient: true },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -208,6 +220,8 @@ export class ProjectsService {
         teamMembers: { include: { adminUser: { include: { user: true } } } },
       },
     });
+
+    return projects.map((project) => this.toClientPortalProject(project));
   }
 
   async findClientTeam(user: RequestUser) {
@@ -292,7 +306,7 @@ export class ProjectsService {
       },
     });
     if (!project) throw new NotFoundException('Project not found.');
-    return project;
+    return this.toClientPortalProject(project);
   }
 
   async create(dto: CreateProjectDto, user?: RequestUser) {
@@ -829,6 +843,28 @@ export class ProjectsService {
           }
         : null,
       projects: client.projects,
+    };
+  }
+
+  private toClientPortalProject<T extends { client: PortalClientPayload }>(project: T) {
+    return {
+      ...project,
+      client: this.toPortalClient(project.client),
+    };
+  }
+
+  private toPortalClient(client: PortalClientPayload) {
+    return {
+      id: client.id,
+      name: client.name,
+      company: client.company,
+      email: client.email,
+      phone: client.phone,
+      plan: client.plan,
+      status: client.status,
+      responsibleId: client.responsibleId,
+      createdAt: client.createdAt,
+      updatedAt: client.updatedAt,
     };
   }
 

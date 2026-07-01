@@ -27,6 +27,10 @@ Checklist para liberar o ecossistema Ateliux em producao.
 ## Dados e servicos
 
 - [ ] `DATABASE_URL` producao
+- [ ] Homologacao Docker local revisada antes do deploy externo
+- [ ] Relatorio `docs/reports/docker-local-homolog-latest.md` revisado
+- [ ] Relatorio `docs/reports/ngrok-vercel-homolog-latest.md` revisado quando usar Vercel via ngrok
+- [ ] Banco de pre-producao criado limpo
 - [ ] Backup do banco
 - [ ] Redis producao
 - [ ] Cloudinary producao
@@ -45,6 +49,10 @@ Checklist para liberar o ecossistema Ateliux em producao.
 - [ ] Banco nao contem URLs `res.cloudinary.com/demo`
 - [ ] Banco nao contem usuarios com senha padrao demo
 - [ ] `npm run production:check-clean` ok
+- [ ] `npm run db:check-clean` ok
+- [ ] Limpeza demo, se usada, foi executada em dry-run antes
+- [ ] Limpeza demo, se usada, teve confirmacao explicita
+- [ ] Relatorio `docs/reports/demo-cleanup-latest.md` revisado
 
 ## Seguranca operacional
 
@@ -74,6 +82,16 @@ Checklist para liberar o ecossistema Ateliux em producao.
 - [ ] Delete bloqueado quando arquivo ainda esta vinculado a blog/financeiro
 - [ ] Permissoes por role revisadas
 - [ ] `POST /admin/projects/full-setup` validado com `ADMIN` e `PROJECT_MANAGER`
+- [ ] Acao `Criar projeto para este cliente` leva para `/portal-do-cliente/projetos?clientId=<clientId>&create=1`
+- [ ] Nao existe modal/acao de vinculo de projeto que salve somente na UI
+- [ ] Full setup bloqueia troca acidental do cliente quando `clientId` vem pela query
+- [ ] Criacao bem-sucedida redireciona para `/portal-do-cliente/projetos/[projectId]`
+- [ ] F5 na admin mantem projeto criado e cliente correto
+- [ ] Projeto `visibleToClient=true` aparece no Portal do Cliente
+- [ ] Projeto `visibleToClient=false` nao aparece no Portal do Cliente
+- [ ] Erro sem responsavel/prazo/dados minimos nao mostra sucesso falso
+- [ ] `npm run e2e` passa com Playwright contra ambiente validado
+- [ ] E2E nao aponta para producao sem autorizacao explicita
 - [ ] `POST /admin/projects` legado retorna erro controlado e nao cria projeto
 - [ ] `GET /admin/projects/:id/overview` validado com `ADMIN`, `PROJECT_MANAGER`, `DESIGNER_DEV`, `SUPPORT` e `FINANCE`
 - [ ] `GET /admin/projects/:id/overview` retorna `403` para `EDITOR` e `ATTENDANCE`
@@ -84,6 +102,8 @@ Checklist para liberar o ecossistema Ateliux em producao.
 - [ ] Criacao completa de projeto registra `AuditLog`
 - [ ] Criacao de projeto visivel gera notificacao para o cliente
 - [ ] Edicao de responsavel/progresso/prazo/etapa reflete no Portal e registra historico
+- [ ] Status comercial de cliente salvo em `Client.pipelineStatus`, separado de `Client.status`
+- [ ] `pipelineStatus` nao aparece nas respostas autenticadas do cliente
 - [ ] Ocultar projeto remove o item dos endpoints do cliente
 - [ ] `npm audit` sem risco inaceitavel
 - [ ] Teste de rollback
@@ -103,6 +123,15 @@ Checklist para liberar o ecossistema Ateliux em producao.
 - [ ] Backend build ok
 - [ ] Frontend build ok
 - [ ] Admin build ok
+- [ ] `npm run validate:backend` ok
+- [ ] `npm run validate:admin` ok
+- [ ] `npm run validate:frontend` ok
+- [ ] `npm run validate:e2e` ok
+- [ ] `npm run validate:all` ok
+- [ ] `npm run validate:pre-production` ok
+- [ ] Relatorio `docs/reports/pre-production-validation-latest.md` revisado
+- [ ] Relatorio `docs/reports/preproduction-database-validation-latest.md` revisado
+- [ ] Env examples de pre-producao revisados sem secrets reais
 - [ ] Auth cliente ok
 - [ ] Auth admin ok
 - [ ] Upload/revisao/download ok
@@ -130,3 +159,4 @@ Checklist para liberar o ecossistema Ateliux em producao.
 - [ ] Central operacional do projeto valida abas de visao geral, cliente, equipe, escopo, etapas, briefing, arquivos, aprovacoes, preview, cronograma, financeiro, historico e configuracoes do Portal
 - [ ] Alteracao de progresso/status/etapa/visibilidade na central reflete no Portal do Cliente
 - [ ] Primeiro cliente real pode ser criado pela admin
+- [ ] Harness Playwright documentado e executado antes do deploy

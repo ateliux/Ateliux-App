@@ -18,6 +18,7 @@ import {
   inviteAdminClient,
   listAdminClients,
   updateAdminClient,
+  updateAdminClientPipelineStatus,
   updateAdminClientStatus,
 } from "@/services/admin-clients.service";
 
@@ -70,24 +71,26 @@ const emptyDraft: AdminClient = {
   lastUpdate: "Conta criada no admin",
   lastAccess: "Nunca acessou",
   accountStatus: "Aguardando convite",
-  linkedProject: "",
+  projectId: "",
   notes: "",
 };
 
 const inputClassName = "rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#00B074]/20";
 
+function createProjectForClientHref(clientId: AdminClient["id"]) {
+  return `/portal-do-cliente/projetos?clientId=${encodeURIComponent(String(clientId))}&create=1`;
+}
+
 function ClientCard({
   client,
   onDetails,
   onEdit,
-  onLinkProject,
   onDeactivate,
   onDelete,
 }: {
   client: AdminClient;
   onDetails: (client: AdminClient) => void;
   onEdit: (client: AdminClient) => void;
-  onLinkProject: (client: AdminClient) => void;
   onDeactivate: (client: AdminClient) => void;
   onDelete: (client: AdminClient) => void;
 }) {
@@ -114,9 +117,9 @@ function ClientCard({
         <button type="button" onClick={() => onEdit(client)} className="rounded-lg bg-gray-50 p-2 text-gray-500 hover:text-[#00B074]" aria-label="Editar cliente">
           <Edit3 className="h-4 w-4" />
         </button>
-        <button type="button" onClick={() => onLinkProject(client)} className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500 hover:text-[#00B074]">
-          Vincular
-        </button>
+        <Link href={createProjectForClientHref(client.id)} data-testid="create-project-for-client-link" className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500 hover:text-[#00B074]">
+          Criar projeto para este cliente
+        </Link>
         <Link href="/portal-do-cliente/projetos" className="rounded-lg bg-gray-50 p-2 text-gray-500 hover:text-[#00B074]" aria-label="Abrir portal">
           <ExternalLink className="h-4 w-4" />
         </Link>
@@ -139,7 +142,7 @@ export function ClientsManagementView() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<AdminClient>(emptyDraft);
   const [selectedClient, setSelectedClient] = useState<AdminClient | null>(null);
-  const [modal, setModal] = useState<"details" | "editor" | "link" | "delete" | null>(null);
+  const [modal, setModal] = useState<"details" | "editor" | "delete" | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -188,12 +191,6 @@ export function ClientsManagementView() {
     setModal("editor");
   }
 
-  function openLinkProject(client: AdminClient) {
-    setSelectedClient(client);
-    setDraft({ ...client });
-    setModal("link");
-  }
-
   async function saveClient() {
     const normalizedDraft = {
       ...draft,
@@ -202,11 +199,16 @@ export function ClientsManagementView() {
     };
 
     try {
-      const saved = source === "api"
+      let saved = source === "api"
         ? selectedClient
           ? await updateAdminClient(selectedClient.id, normalizedDraft)
           : await createAdminClient(normalizedDraft)
         : normalizedDraft;
+
+      if (source === "api" && selectedClient && normalizedDraft.accountStatus !== selectedClient.accountStatus) {
+        const apiStatus = normalizedDraft.accountStatus === "Ativa" ? "ACTIVE" : normalizedDraft.accountStatus === "Inativa" ? "SUSPENDED" : "INVITED";
+        saved = await updateAdminClientStatus(selectedClient.id, apiStatus);
+      }
 
       setClients((current) => {
         const exists = current.some((client) => client.id === saved.id);
@@ -214,7 +216,7 @@ export function ClientsManagementView() {
       });
       setSelectedClient(saved);
       setModal("details");
-      setNotice(source === "api" ? "Cliente salvo no backend." : "Cliente salvo apenas no fallback mockado.");
+      setNotice(source === "api" ? "Dados principais do cliente salvos no backend." : "Cliente salvo apenas no fallback mockado.");
       setError("");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel salvar cliente.");
@@ -226,11 +228,25 @@ export function ClientsManagementView() {
     setSelectedClient((current) => (current?.id === clientId ? { ...current, ...patch } : current));
   }
 
+  async function changePipelineStatus(client: AdminClient, status: ClientStatus) {
+    try {
+      const saved = source === "api"
+        ? await updateAdminClientPipelineStatus(client.id, status)
+        : { ...client, status, lastUpdate: `Status comercial alterado para ${statusLabel[status]}` };
+
+      updateClient(client.id, saved);
+      setNotice(source === "api" ? "Status comercial salvo no backend." : "Status comercial atualizado apenas no fallback mockado.");
+      setError("");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel atualizar status comercial.");
+    }
+  }
+
   async function deactivateClient(client: AdminClient) {
     try {
-      if (source === "api") await updateAdminClientStatus(client.id, "SUSPENDED");
+      const saved = source === "api" ? await updateAdminClientStatus(client.id, "SUSPENDED") : null;
       updateClient(client.id, {
-        status: "inativo",
+        ...(saved ?? {}),
         accountStatus: "Inativa",
         lastUpdate: "Conta inativada pelo admin",
       });
@@ -309,7 +325,7 @@ export function ClientsManagementView() {
                   </div>
                   <div className="space-y-3">
                     {columnClients.map((client) => (
-                      <ClientCard key={client.id} client={client} onDetails={(item) => { setSelectedClient(item); setModal("details"); }} onEdit={openEdit} onLinkProject={openLinkProject} onDeactivate={deactivateClient} onDelete={selectForDelete} />
+                      <ClientCard key={client.id} client={client} onDetails={(item) => { setSelectedClient(item); setModal("details"); }} onEdit={openEdit} onDeactivate={deactivateClient} onDelete={selectForDelete} />
                     ))}
                   </div>
                 </section>
@@ -371,7 +387,7 @@ export function ClientsManagementView() {
         </div>
       ) : null}
 
-      <Modal isOpen={modal === "details" && Boolean(selectedClient)} onClose={() => setModal(null)} title="Detalhes do cliente" description="Resumo da conta e do projeto vinculado ao Portal do Cliente." size="lg">
+      <Modal isOpen={modal === "details" && Boolean(selectedClient)} onClose={() => setModal(null)} title="Detalhes do cliente" description="Resumo da conta e do projeto real no Portal do Cliente." size="lg">
         {selectedClient ? (
           <div className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
@@ -380,19 +396,19 @@ export function ClientsManagementView() {
               <div className="rounded-2xl bg-gray-50 p-4"><p className="text-xs text-gray-400">Projeto</p><p className="font-bold text-gray-900">{selectedClient.project}</p></div>
               <div className="rounded-2xl bg-gray-50 p-4"><p className="text-xs text-gray-400">Ultima atualizacao</p><p className="font-bold text-gray-900">{selectedClient.lastUpdate}</p></div>
               <div className="rounded-2xl bg-gray-50 p-4"><p className="text-xs text-gray-400">Ultimo acesso</p><p className="font-bold text-gray-900">{selectedClient.lastAccess}</p></div>
-              <div className="rounded-2xl bg-gray-50 p-4"><p className="text-xs text-gray-400">Projeto vinculado</p><p className="font-bold text-gray-900">{selectedClient.linkedProject || "Sem vinculo"}</p></div>
+              <div className="rounded-2xl bg-gray-50 p-4"><p className="text-xs text-gray-400">Projeto real</p><p className="font-bold text-gray-900">{selectedClient.projectId || "Sem projeto"}</p></div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-semibold text-gray-700">
-                Alterar status
-                <select value={selectedClient.status} onChange={(event) => { updateClient(selectedClient.id, { status: event.target.value as ClientStatus, lastUpdate: `Status visual alterado para ${statusLabel[event.target.value as ClientStatus]}` }); setNotice("Status de pipeline atualizado somente na UI; o backend armazena status de conta."); }} className={inputClassName}>
+                Status comercial
+                <select value={selectedClient.status} onChange={(event) => { void changePipelineStatus(selectedClient, event.target.value as ClientStatus); }} className={inputClassName}>
                   {columns.map((column) => <option key={column.id} value={column.id}>{column.title}</option>)}
                   <option value="inativo">Inativo</option>
                 </select>
               </label>
               <label className="grid gap-2 text-sm font-semibold text-gray-700">
                 Status da conta
-                <select value={selectedClient.accountStatus ?? "Ativa"} onChange={async (event) => { const accountStatus = event.target.value as ClientAccountStatus; const apiStatus = accountStatus === "Ativa" ? "ACTIVE" : accountStatus === "Inativa" ? "SUSPENDED" : "INVITED"; try { if (source === "api") await updateAdminClientStatus(selectedClient.id, apiStatus); updateClient(selectedClient.id, { accountStatus, status: accountStatus === "Inativa" ? "inativo" : selectedClient.status }); setNotice(source === "api" ? "Status da conta atualizado no backend." : "Status da conta atualizado apenas no fallback mockado."); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Nao foi possivel atualizar status da conta."); } }} className={inputClassName}>
+                <select value={selectedClient.accountStatus ?? "Ativa"} onChange={async (event) => { const accountStatus = event.target.value as ClientAccountStatus; const apiStatus = accountStatus === "Ativa" ? "ACTIVE" : accountStatus === "Inativa" ? "SUSPENDED" : "INVITED"; try { const saved = source === "api" ? await updateAdminClientStatus(selectedClient.id, apiStatus) : null; updateClient(selectedClient.id, { ...(saved ?? {}), accountStatus }); setNotice(source === "api" ? "Status da conta atualizado no backend." : "Status da conta atualizado apenas no fallback mockado."); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Nao foi possivel atualizar status da conta."); } }} className={inputClassName}>
                   <option>Ativa</option>
                   <option>Aguardando convite</option>
                   <option>Inativa</option>
@@ -400,7 +416,9 @@ export function ClientsManagementView() {
               </label>
             </div>
             <div className="flex flex-wrap justify-end gap-3">
-              <AdminButton variant="secondary" onClick={() => openLinkProject(selectedClient)}>Vincular projeto</AdminButton>
+              <Link href={createProjectForClientHref(selectedClient.id)} data-testid="create-project-for-client-link" className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50">
+                <Plus className="h-4 w-4" /> Criar projeto para este cliente
+              </Link>
               <AdminButton variant="secondary" onClick={async () => { try { if (source === "api") await inviteAdminClient(selectedClient.id); updateClient(selectedClient.id, { accountStatus: "Aguardando convite" }); setNotice(source === "api" ? "Convite enviado pelo backend." : "Convite simulado no fallback mockado."); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Nao foi possivel enviar convite."); } }}>Enviar convite</AdminButton>
               <Link href="/portal-do-cliente/projetos" className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50">
                 <ExternalLink className="h-4 w-4" /> Ver portal
@@ -428,25 +446,6 @@ export function ClientsManagementView() {
           <label className="grid gap-2 text-sm font-semibold text-gray-700">Notas<textarea value={draft.notes ?? ""} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} rows={3} className={`${inputClassName} resize-none`} /></label>
           <div className="flex justify-end gap-3"><AdminButton variant="secondary" onClick={() => setModal(null)}>Cancelar</AdminButton><AdminButton onClick={saveClient}>Salvar cliente</AdminButton></div>
         </div>
-      </Modal>
-
-      <Modal isOpen={modal === "link" && Boolean(selectedClient)} onClose={() => setModal(null)} title="Vincular projeto" description="Simula o vinculo entre a conta do cliente e o projeto exibido no portal.">
-        {selectedClient ? (
-          <div className="grid gap-4">
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">
-              Codigo do projeto
-              <input value={draft.linkedProject ?? ""} onChange={(event) => setDraft((current) => ({ ...current, linkedProject: event.target.value }))} className={inputClassName} />
-            </label>
-            <label className="grid gap-2 text-sm font-semibold text-gray-700">
-              Atualizacao para o portal
-              <input value={draft.lastUpdate} onChange={(event) => setDraft((current) => ({ ...current, lastUpdate: event.target.value }))} className={inputClassName} />
-            </label>
-            <div className="flex justify-end gap-3">
-              <AdminButton variant="secondary" onClick={() => setModal(null)}>Cancelar</AdminButton>
-              <AdminButton onClick={() => { updateClient(selectedClient.id, { linkedProject: draft.linkedProject, lastUpdate: draft.lastUpdate }); setModal("details"); }}>Salvar vinculo</AdminButton>
-            </div>
-          </div>
-        ) : null}
       </Modal>
 
       <Modal isOpen={modal === "delete" && Boolean(selectedClient)} onClose={() => setModal(null)} title="Arquivar cliente" description={source === "api" ? "Esta acao arquiva o cliente no backend." : "Esta acao remove o cliente apenas do fallback mockado."}>

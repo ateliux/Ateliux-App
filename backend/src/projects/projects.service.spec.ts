@@ -285,6 +285,14 @@ function createPrismaMock() {
     project: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const project = { id: 'project-1', ...data };
+        storedProject = {
+          ...storedProject,
+          ...project,
+          client,
+          manager,
+          createdAt: storedProject.createdAt,
+          updatedAt: new Date('2026-06-30'),
+        };
         calls.projects.push(project);
         return project;
       },
@@ -301,7 +309,7 @@ function createPrismaMock() {
       },
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === storedProject.id ? storedProject : null),
       findUniqueOrThrow: async () => ({
-        id: 'project-1',
+        ...storedProject,
         client,
         manager,
         teamMembers: [{ adminUser: designer }],
@@ -450,7 +458,24 @@ describe('ProjectsService full setup', () => {
     });
 
     assert.equal(project.id, 'project-1');
-    assert.equal((calls.projects[0] as { managerId?: string }).managerId, 'admin-1');
+    const createdProject = calls.projects[0] as {
+      clientId?: string;
+      managerId?: string;
+      currentStage?: string;
+      progress?: number;
+      deadline?: Date;
+      scope?: string;
+      clientFacingSummary?: string;
+      visibleToClient?: boolean;
+    };
+    assert.equal(createdProject.clientId, 'client-1');
+    assert.equal(createdProject.managerId, 'admin-1');
+    assert.equal(createdProject.currentStage, 'Planejamento');
+    assert.equal(createdProject.progress, 10);
+    assert.equal(createdProject.deadline?.toISOString(), '2026-08-01T00:00:00.000Z');
+    assert.equal(createdProject.scope, 'Portal, auth e dashboards');
+    assert.equal(createdProject.clientFacingSummary, 'Resumo para o cliente');
+    assert.equal(createdProject.visibleToClient, true);
     assert.equal(calls.team.length, 1);
     assert.equal(calls.stages.length, 1);
     assert.equal(calls.briefings.length, 1);
@@ -458,6 +483,90 @@ describe('ProjectsService full setup', () => {
     assert.equal(calls.finance.length, 1);
     assert.equal(calls.history.length, 1);
     assert.equal(calls.notifications.length, 1);
+  });
+
+  it('cria projeto visivel e o Portal do Cliente lista pelo clientId real', async () => {
+    const { prisma } = createPrismaMock();
+    const service = new ProjectsService(prisma as never);
+
+    const project = await service.createFullSetup(adminUser, {
+      clientId: 'client-1',
+      name: 'Projeto visivel',
+      type: 'SaaS',
+      scope: 'Escopo visivel',
+      description: 'Descricao visivel',
+      status: ProjectStatus.ACTIVE,
+      priority: Priority.MEDIUM,
+      managerId: 'admin-1',
+      deadline: '2026-08-01',
+      visibleToClient: true,
+      currentStage: 'Design',
+      progress: 25,
+      clientFacingSummary: 'Resumo visivel ao cliente',
+    });
+
+    const projects = await service.findClientProjects({ ...adminUser, clientId: 'client-1' });
+
+    assert.equal(project.id, 'project-1');
+    assert.equal(project.clientId, 'client-1');
+    assert.equal(projects.length, 1);
+    assert.equal((projects[0] as { id?: string }).id, 'project-1');
+    assert.equal((projects[0] as { currentStage?: string }).currentStage, 'Design');
+    assert.equal((projects[0] as { progress?: number }).progress, 25);
+  });
+
+  it('cria projeto invisivel sem listar no Portal nem notificar cliente', async () => {
+    const { prisma, calls } = createPrismaMock();
+    const service = new ProjectsService(prisma as never);
+
+    const project = await service.createFullSetup(adminUser, {
+      clientId: 'client-1',
+      name: 'Projeto interno',
+      type: 'SaaS',
+      scope: 'Escopo interno',
+      description: 'Descricao interna',
+      status: ProjectStatus.ACTIVE,
+      priority: Priority.MEDIUM,
+      managerId: 'admin-1',
+      deadline: '2026-08-01',
+      visibleToClient: false,
+      currentStage: 'Planejamento interno',
+      progress: 0,
+      clientFacingSummary: '',
+    });
+
+    const projects = await service.findClientProjects({ ...adminUser, clientId: 'client-1' });
+
+    assert.equal(project.id, 'project-1');
+    assert.equal(project.visibleToClient, false);
+    assert.equal(projects.length, 0);
+    assert.equal(calls.notifications.length, 0);
+    assert.equal((calls.history[0] as { metadata?: { visibleToClient?: boolean } }).metadata?.visibleToClient, false);
+  });
+
+  it('nao lista projeto criado para outro cliente no Portal', async () => {
+    const { prisma } = createPrismaMock();
+    const service = new ProjectsService(prisma as never);
+
+    await service.createFullSetup(adminUser, {
+      clientId: 'client-1',
+      name: 'Projeto do cliente correto',
+      type: 'SaaS',
+      scope: 'Escopo',
+      description: 'Descricao',
+      status: ProjectStatus.ACTIVE,
+      priority: Priority.MEDIUM,
+      managerId: 'admin-1',
+      deadline: '2026-08-01',
+      visibleToClient: true,
+      currentStage: 'Design',
+      progress: 20,
+      clientFacingSummary: 'Resumo',
+    });
+
+    const projects = await service.findClientProjects({ ...adminUser, clientId: 'client-2' });
+
+    assert.equal(projects.length, 0);
   });
 
   it('falha ao criar projeto sem responsavel valido', async () => {
@@ -481,6 +590,30 @@ describe('ProjectsService full setup', () => {
           progress: 0,
         }),
       /Project manager is required/,
+    );
+  });
+
+  it('falha ao criar projeto visivel sem dados minimos do Portal', async () => {
+    const { prisma } = createPrismaMock();
+    const service = new ProjectsService(prisma as never);
+
+    await assert.rejects(
+      () =>
+        service.createFullSetup(adminUser, {
+          clientId: 'client-1',
+          name: 'Projeto sem prazo',
+          type: 'Site',
+          scope: '',
+          description: '',
+          status: ProjectStatus.ACTIVE,
+          priority: Priority.MEDIUM,
+          managerId: 'admin-1',
+          deadline: '',
+          visibleToClient: true,
+          currentStage: '',
+          progress: 0,
+        }),
+      /prazo valido/,
     );
   });
 

@@ -17,7 +17,8 @@
     "prisma:seed:dev": "tsx prisma/seed.dev.ts",
     "prisma:bootstrap-admin": "tsx prisma/bootstrap-admin.ts",
     "production:check-clean": "tsx prisma/check-production-clean.ts",
-    "test": "tsx --test src/auth/auth-cookie.service.spec.ts src/auth/auth.service.spec.ts src/privacy/privacy.service.spec.ts src/projects/projects.service.spec.ts src/uploads/upload-validation.service.spec.ts src/uploads/uploads.e2e-spec.ts src/files/files.e2e-spec.ts src/blog/blog.service.spec.ts src/client-requests/client-requests.service.spec.ts src/support/support.service.spec.ts src/inbox/inbox.service.spec.ts"
+    "production:clean-demo-data": "tsx scripts/clean-demo-data.ts",
+    "test": "tsx --test src/auth/auth-cookie.service.spec.ts src/auth/auth.service.spec.ts src/privacy/privacy.service.spec.ts src/clients/clients.service.spec.ts src/projects/projects.service.spec.ts src/uploads/upload-validation.service.spec.ts src/uploads/uploads.e2e-spec.ts src/files/files.e2e-spec.ts src/blog/blog.service.spec.ts src/client-requests/client-requests.service.spec.ts src/support/support.service.spec.ts src/inbox/inbox.service.spec.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.0",

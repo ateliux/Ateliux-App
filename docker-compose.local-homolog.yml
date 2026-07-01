@@ -1,0 +1,91 @@
+name: ateliux-local-homolog
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ateliux-local-homolog-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - ateliux_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ateliux_local_homolog
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ateliux-local-homolog-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ateliux_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ateliux_local_homolog
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ateliux-local-homolog-backend
+    env_file:
+      - ./.env.docker
+    ports:
+      - "3054:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3001/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - ateliux_local_homolog
+    restart: unless-stopped
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ateliux-local-homolog-ngrok
+    profiles:
+      - ngrok
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+      NGROK_DOMAIN: ${NGROK_DOMAIN:-}
+    command: ["http", "backend:3001"]
+    ports:
+      - "4040:4040"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ateliux_local_homolog
+    restart: unless-stopped
+
+volumes:
+  ateliux_postgres_data:
+  ateliux_redis_data:
+
+networks:
+  ateliux_local_homolog:
+    driver: bridge

@@ -47,7 +47,7 @@ export function DashboardOverviewView() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-        <QuickAction href="/clientes" title="Gerenciar clientes" description="Kanban, lista, status, portal e vinculos de projeto." />
+        <QuickAction href="/clientes" title="Gerenciar clientes" description="Kanban, lista, status e criacao de projetos reais por cliente." />
         <QuickAction href="/blog" title="Operar blog" description="Criar, revisar, agendar, publicar ou arquivar artigos." />
         <QuickAction href="/dashboard?view=inbox" title="Responder suporte" description="Central unificada de tickets e solicitacoes do portal." />
         <QuickAction href="/portal-do-cliente/previews" title="Enviar previews" description="Criar links de preview e enviar para aprovacao." />

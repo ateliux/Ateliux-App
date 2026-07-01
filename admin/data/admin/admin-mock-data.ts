@@ -153,7 +153,7 @@ export const ADMIN_CLIENTS: readonly AdminClient[] = [
     lastUpdate: "Design da vitrine em revisao",
     lastAccess: "Hoje, 08:20",
     accountStatus: "Ativa",
-    linkedProject: "PRJ-1001",
+    projectId: "PRJ-1001",
     notes: "Cliente acompanha aprovacoes pelo portal.",
   },
   {
@@ -170,7 +170,7 @@ export const ADMIN_CLIENTS: readonly AdminClient[] = [
     lastUpdate: "Montador de pedido iniciado",
     lastAccess: "Ontem",
     accountStatus: "Ativa",
-    linkedProject: "PRJ-1002",
+    projectId: "PRJ-1002",
     notes: "Precisa receber preview do cardapio antes da publicacao.",
   },
   {
@@ -187,7 +187,7 @@ export const ADMIN_CLIENTS: readonly AdminClient[] = [
     lastUpdate: "Briefing tecnico em aberto",
     lastAccess: "Aguardando primeiro acesso",
     accountStatus: "Aguardando convite",
-    linkedProject: "PRJ-1003",
+    projectId: "PRJ-1003",
     notes: "Validar escopo tecnico antes do contrato final.",
   },
   {
@@ -204,7 +204,7 @@ export const ADMIN_CLIENTS: readonly AdminClient[] = [
     lastUpdate: "Preview enviado para aprovacao",
     lastAccess: "Hoje, 12:10",
     accountStatus: "Ativa",
-    linkedProject: "PRJ-1004",
+    projectId: "PRJ-1004",
     notes: "Aguardando aprovacao final da hero.",
   },
   {
@@ -221,7 +221,7 @@ export const ADMIN_CLIENTS: readonly AdminClient[] = [
     lastUpdate: "Conta criada, aguardando proposta",
     lastAccess: "Nunca acessou",
     accountStatus: "Aguardando convite",
-    linkedProject: "PRJ-1005",
+    projectId: "PRJ-1005",
     notes: "Enviar convite apos revisao comercial.",
   },
 ];

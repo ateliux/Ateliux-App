@@ -1,9 +1,11 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountStatus, UserRole } from '@prisma/client';
 import { hash } from 'bcryptjs';
+import type { RequestUser } from '../common/utils/request-user';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateClientDto } from './dto/create-client.dto';
+import type { UpdateClientPipelineStatusDto } from './dto/update-client-pipeline-status.dto';
 import type { UpdateClientStatusDto } from './dto/update-client-status.dto';
 import type { UpdateClientDto } from './dto/update-client.dto';
 
@@ -108,5 +110,33 @@ export class ClientsService {
   async updateStatus(id: string, dto: UpdateClientStatusDto) {
     await this.findOne(id);
     return this.prisma.client.update({ where: { id }, data: { status: dto.status } });
+  }
+
+  async updatePipelineStatus(id: string, dto: UpdateClientPipelineStatusDto, user?: RequestUser) {
+    const previous = await this.findOne(id);
+    const client = await this.prisma.client.update({
+      where: { id },
+      data: { pipelineStatus: dto.status },
+      include: { responsible: { include: { user: true } }, account: true, projects: true },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: user?.adminUserId ?? user?.id,
+        actorType: user ? 'admin' : 'system',
+        action: 'CLIENT_PIPELINE_STATUS_UPDATED',
+        entityType: 'Client',
+        entityId: client.id,
+        clientId: client.id,
+        metadata: {
+          title: 'Status comercial do cliente atualizado',
+          description: 'Status comercial interno atualizado pela equipe Ateliux.',
+          before: previous.pipelineStatus,
+          after: client.pipelineStatus,
+        },
+      },
+    });
+
+    return client;
   }
 }

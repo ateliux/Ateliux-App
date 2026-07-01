@@ -1,0 +1,36 @@
+# Ateliux admin Validation Report
+
+- Date: 2026-06-30T22:03:29.800Z
+- Mode: admin
+- Branch: main
+- Commit: a66fd3f
+- Result: passed
+
+## Steps
+
+| Step | Status | Duration |
+| --- | --- | --- |
+| Admin typecheck | passed | 4.8s |
+| Admin lint | passed | 21.5s |
+| Admin build | passed | 43.6s |
+| Admin audit | passed | 2.7s |
+
+## Warnings
+
+- None recorded by the orchestrator.
+
+## Known Warnings
+
+- Prisma warns that package.json#prisma will be removed in Prisma 7.
+- Admin and frontend may still report Next.js no-img-element warnings where dynamic images use <img>.
+- Next.js may warn about multiple lockfiles because the repository has root, admin and frontend package-lock files.
+
+## Pending
+
+- Expand browser E2E coverage to blog, uploads, inbox, finance and notifications.
+- Run strict environment validation in the real staging/production provider with VALIDATION_STRICT_ENV=true.
+
+## Security Notes
+
+- This report intentionally does not include environment values or secrets.
+- E2E production targets require explicit E2E_ALLOW_PRODUCTION=true.

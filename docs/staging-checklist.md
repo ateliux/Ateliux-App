@@ -4,6 +4,8 @@ Checklist para subir o ecossistema Ateliux em staging.
 
 ## Ambiente
 
+- [ ] Homologacao Docker local validada antes do staging externo
+- [ ] Relatorio `docs/reports/docker-local-homolog-latest.md` revisado
 - [ ] Backend env configurado
 - [ ] Frontend env configurado
 - [ ] Admin env configurado
@@ -76,6 +78,8 @@ Checklist para subir o ecossistema Ateliux em staging.
 - [ ] Cliente recebe notificacao quando projeto visivel e criado
 - [ ] Admin edita responsavel/progresso/prazo/etapa e cliente ve a alteracao no Portal
 - [ ] Admin edita progresso/status/etapa/visibilidade pela central operacional e cliente ve a alteracao no Portal
+- [ ] Admin altera `pipelineStatus` do cliente e a mudanca persiste apos reload
+- [ ] Portal do Cliente nao recebe `pipelineStatus` em `/auth/client/me` nem `/client/projects`
 - [ ] Admin oculta projeto e cliente deixa de ve-lo no Portal
 - [ ] Blog testado
 - [ ] Blog admin cria tag e publica artigo com tag principal
